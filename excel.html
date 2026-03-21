@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Excel文件处理工具</title>
-    <script src="lib/xlsx.full.min.js"></script>
+    <!-- 使用 xlsx-js-style 替代标准 SheetJS，支持样式读写 -->
+    <script src="lib/xlsx.bundle.js"></script>
     <script src="lib/jszip.min.js"></script>
     <style>
         * {
@@ -162,7 +163,9 @@
             }
         }
 
+        /* 🔧 修复：支持label标签实现上传 */
         .upload-area {
+            display: block;
             border: 3px dashed #667eea;
             border-radius: 15px;
             padding: 60px 20px;
@@ -197,7 +200,15 @@
         }
 
         .file-input {
-            display: none;
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
         }
 
         .btn {
@@ -699,12 +710,13 @@
 
         <div class="content">
             <div class="step-content active" id="step1">
-                <div class="upload-area" id="uploadArea">
+                <!-- 使用label标签实现文件上传 -->
+                <label for="fileInput" class="upload-area" id="uploadArea">
                     <div class="upload-icon">📁</div>
                     <div class="upload-text" id="uploadText">拖放Excel文件到这里</div>
                     <div class="upload-hint" id="uploadHint">或点击选择文件（支持.xlsx和.xls格式）</div>
                     <input type="file" class="file-input" id="fileInput" accept=".xlsx,.xls">
-                </div>
+                </label>
                 <div class="button-group" id="step1ButtonGroup" style="display: none;">
                     <button class="btn btn-primary" id="step1Next" disabled onclick="goToStep(2)">下一步</button>
                 </div>
@@ -882,6 +894,7 @@
         const MAX_TOTAL_FILE_BYTES = 100 * 1024 * 1024;
         const MAX_FILE_COUNT = 50;
         const MAX_SHEET_COUNT = 200;
+        const HARD_LIMIT_FILE_BYTES = 50 * 1024 * 1024; // 硬性限制50MB
         const MERGE_KEY_SEPARATOR = '::';
 
         // 统一的读取选项，确保格式保留
@@ -904,64 +917,411 @@
             compression: true      // 启用压缩
         };
 
-        const uploadArea = document.getElementById('uploadArea');
-        const fileInput = document.getElementById('fileInput');
+        // ═══════════════════════════════════════════════════════════════
+        // SECTION: 公共格式复制函数
+        // ═══════════════════════════════════════════════════════════════
 
-        uploadArea.addEventListener('click', () => fileInput.click());
-        
-        // 页面刷新/关闭前提示（防止误操作丢失数据）
-        window.addEventListener('beforeunload', (e) => {
-            // 如果有正在处理的数据或生成的文件，提示用户
-            if (workbook || uploadedFiles.length > 0 || generatedFiles.length > 0) {
+        /**
+         * 安全深拷贝单元格对象
+         * 处理 JSON.parse/stringify 对 NaN/Infinity/undefined 的边缘情况
+         * @param {Object|undefined} cell - 源单元格对象
+         * @returns {Object|undefined} 深拷贝后的单元格，源为空时返回 undefined
+         */
+        function deepCopyCell(cell) {
+            if (!cell) return undefined;
+            try {
+                var copy = JSON.parse(JSON.stringify(cell));
+                // 修复 NaN / Infinity 在 JSON 序列化后变为 null 的问题
+                if (cell.v !== undefined && cell.v !== null && typeof cell.v === 'number' && copy.v === null) {
+                    copy.v = 0; // 保留数字类型，NaN/Infinity 归零
+                }
+                return copy;
+            } catch (e) {
+                // fallback: 浅拷贝
+                var result = {};
+                for (var key in cell) {
+                    if (cell.hasOwnProperty(key) && typeof cell[key] !== 'function') {
+                        result[key] = cell[key];
+                    }
+                }
+                return result;
+            }
+        }
+
+        /**
+         * 调整单元格范围引用中的行号，根据行映射表转换
+         * @param {string} rangeStr - 原始范围字符串，如 "A1:B10"
+         * @param {Array<number>} rowsToKeep - 保留的行号数组（0-based）
+         * @returns {string|null} 调整后的范围字符串，不在保留行内返回 null
+         */
+        function adjustRangeReference(rangeStr, rowsToKeep) {
+            try {
+                var match = rangeStr.match(/^([A-Z]+)(\d+):([A-Z]+)(\d+)$/);
+                if (!match) return rangeStr;
+                var startRowNum = parseInt(match[2]) - 1;
+                var endRowNum = parseInt(match[4]) - 1;
+                var startIdx = rowsToKeep.indexOf(startRowNum);
+                var endIdx = rowsToKeep.indexOf(endRowNum);
+                if (startIdx === -1 || endIdx === -1) return null;
+                return match[1] + (startIdx + 1) + ':' + match[3] + (endIdx + 1);
+            } catch (e) {
+                return rangeStr;
+            }
+        }
+
+        /**
+         * 复制工作表特殊属性（统一入口）
+         * @param {Object} sourceWs - 源工作表对象
+         * @param {Object} targetWs - 目标工作表对象
+         * @param {Object} [options] - 配置选项
+         * @param {Array<number>} [options.rowsToKeep] - 行号映射表（0-based），用于行号调整
+         * @param {Array<number>} [options.columnsToKeep] - 列号映射表，用于列选择
+         * @param {boolean} [options.skipMerge=false] - 是否跳过合并单元格
+         * @param {boolean} [options.skipCF=false] - 是否跳过条件格式
+         * @param {boolean} [options.skipDV=false] - 是否跳过数据验证
+         * @param {boolean} [options.skipAF=false] - 是否跳过自动筛选
+         * @param {boolean} [options.skipHyperlinks=false] - 是否跳过超链接
+         * @param {boolean} [options.checkFreezeRow=false] - 是否检查冻结行在保留范围内
+         */
+        function copyWorksheetProperties(sourceWs, targetWs, options) {
+            var opts = options || {};
+            var rowsToKeep = opts.rowsToKeep;
+            var colsToKeep = opts.columnsToKeep;
+            var hasRowMapping = Array.isArray(rowsToKeep) && rowsToKeep.length > 0;
+
+            // --- 直接复制（无需调整）的属性 ---
+            var directCopyProps = ['!margins', '!protect', '!pageSetup', '!printOptions', '!sheetPr'];
+            directCopyProps.forEach(function(prop) {
+                if (sourceWs[prop]) {
+                    targetWs[prop] = JSON.parse(JSON.stringify(sourceWs[prop]));
+                }
+            });
+
+            // --- 列宽 ---
+            if (sourceWs['!cols']) {
+                if (Array.isArray(colsToKeep)) {
+                    // 竖向拆分：只选取保留列的列宽
+                    var newCols = [];
+                    for (var i = 0; i < colsToKeep.length; i++) {
+                        if (sourceWs['!cols'][colsToKeep[i]]) {
+                            newCols.push(JSON.parse(JSON.stringify(sourceWs['!cols'][colsToKeep[i]])));
+                        } else {
+                            newCols.push({ wch: 10 }); // 默认列宽
+                        }
+                    }
+                    targetWs['!cols'] = newCols;
+                } else {
+                    targetWs['!cols'] = JSON.parse(JSON.stringify(sourceWs['!cols']));
+                }
+            }
+
+            // --- 行高 ---
+            if (sourceWs['!rows']) {
+                if (hasRowMapping) {
+                    var newRows = [];
+                    for (var r = 0; r < rowsToKeep.length; r++) {
+                        if (sourceWs['!rows'][rowsToKeep[r]]) {
+                            newRows.push(JSON.parse(JSON.stringify(sourceWs['!rows'][rowsToKeep[r]])));
+                        }
+                    }
+                    targetWs['!rows'] = newRows;
+                } else {
+                    targetWs['!rows'] = JSON.parse(JSON.stringify(sourceWs['!rows']));
+                }
+            }
+
+            // --- 合并单元格 ---
+            if (!opts.skipMerge && sourceWs['!merges']) {
+                if (hasRowMapping) {
+                    // 调整行号映射，仅保留两端行都在保留列表中的合并
+                    var newMerges = [];
+                    for (var m = 0; m < sourceWs['!merges'].length; m++) {
+                        var merge = sourceWs['!merges'][m];
+                        if (rowsToKeep.indexOf(merge.s.r) !== -1 && rowsToKeep.indexOf(merge.e.r) !== -1) {
+                            newMerges.push({
+                                s: { r: rowsToKeep.indexOf(merge.s.r), c: merge.s.c },
+                                e: { r: rowsToKeep.indexOf(merge.e.r), c: merge.e.c }
+                            });
+                        }
+                    }
+                    if (newMerges.length > 0) targetWs['!merges'] = newMerges;
+                } else {
+                    targetWs['!merges'] = JSON.parse(JSON.stringify(sourceWs['!merges']));
+                }
+            }
+
+            // --- 条件格式 ---
+            if (!opts.skipCF && sourceWs['!conditionalFormatting']) {
+                if (hasRowMapping) {
+                    var newCF = [];
+                    for (var cf = 0; cf < sourceWs['!conditionalFormatting'].length; cf++) {
+                        var cfItem = JSON.parse(JSON.stringify(sourceWs['!conditionalFormatting'][cf]));
+                        var ref = cfItem.ref || cfItem.sqref;
+                        if (ref) {
+                            var adjustedRef = adjustRangeReference(ref, rowsToKeep);
+                            if (adjustedRef) {
+                                if (cfItem.ref) cfItem.ref = adjustedRef;
+                                if (cfItem.sqref) cfItem.sqref = adjustedRef;
+                                newCF.push(cfItem);
+                            }
+                        } else {
+                            newCF.push(cfItem);
+                        }
+                    }
+                    if (newCF.length > 0) targetWs['!conditionalFormatting'] = newCF;
+                } else {
+                    targetWs['!conditionalFormatting'] = JSON.parse(JSON.stringify(sourceWs['!conditionalFormatting']));
+                }
+            }
+
+            // --- 数据验证 ---
+            if (!opts.skipDV && sourceWs['!dataValidation']) {
+                if (hasRowMapping) {
+                    var newDV = [];
+                    for (var dv = 0; dv < sourceWs['!dataValidation'].length; dv++) {
+                        var dvItem = JSON.parse(JSON.stringify(sourceWs['!dataValidation'][dv]));
+                        var dvRef = dvItem.sqref;
+                        if (dvRef) {
+                            var adjustedDVRef = adjustRangeReference(dvRef, rowsToKeep);
+                            if (adjustedDVRef) {
+                                dvItem.sqref = adjustedDVRef;
+                                newDV.push(dvItem);
+                            }
+                        } else {
+                            newDV.push(dvItem);
+                        }
+                    }
+                    if (newDV.length > 0) targetWs['!dataValidation'] = newDV;
+                } else {
+                    targetWs['!dataValidation'] = JSON.parse(JSON.stringify(sourceWs['!dataValidation']));
+                }
+            }
+
+            // --- 自动筛选 ---
+            if (!opts.skipAF && sourceWs['!autofilter']) {
+                if (hasRowMapping && sourceWs['!autofilter'].ref) {
+                    var adjustedAFRef = adjustRangeReference(sourceWs['!autofilter'].ref, rowsToKeep);
+                    if (adjustedAFRef) {
+                        // 保留完整 autofilter 对象，仅调整 ref
+                        var afCopy = JSON.parse(JSON.stringify(sourceWs['!autofilter']));
+                        afCopy.ref = adjustedAFRef;
+                        targetWs['!autofilter'] = afCopy;
+                    }
+                } else {
+                    targetWs['!autofilter'] = JSON.parse(JSON.stringify(sourceWs['!autofilter']));
+                }
+            }
+
+            // --- 超链接 ---
+            if (!opts.skipHyperlinks && sourceWs['!hyperlinks']) {
+                if (hasRowMapping) {
+                    var newHL = [];
+                    for (var hl = 0; hl < sourceWs['!hyperlinks'].length; hl++) {
+                        var hlItem = JSON.parse(JSON.stringify(sourceWs['!hyperlinks'][hl]));
+                        // 超链接有 Target 和范围 ref 属性，调整行号
+                        if (hlItem.ref) {
+                            var hlMatch = hlItem.ref.match(/^([A-Z]+)(\d+)$/);
+                            if (hlMatch) {
+                                var hlRow = parseInt(hlMatch[2]) - 1;
+                                var hlIdx = rowsToKeep.indexOf(hlRow);
+                                if (hlIdx !== -1) {
+                                    hlItem.ref = hlMatch[1] + (hlIdx + 1);
+                                    newHL.push(hlItem);
+                                }
+                            } else {
+                                newHL.push(hlItem);
+                            }
+                        } else {
+                            newHL.push(hlItem);
+                        }
+                    }
+                    if (newHL.length > 0) targetWs['!hyperlinks'] = newHL;
+                } else {
+                    targetWs['!hyperlinks'] = JSON.parse(JSON.stringify(sourceWs['!hyperlinks']));
+                }
+            }
+
+            // --- 冻结窗格 ---
+            if (sourceWs['!freeze']) {
+                if (hasRowMapping && opts.checkFreezeRow) {
+                    var freeze = sourceWs['!freeze'];
+                    // 如果冻结行超过保留行范围，清除冻结
+                    if (freeze.ySplit !== undefined && freeze.ySplit >= rowsToKeep.length) {
+                        // 清除冻结
+                    } else {
+                        targetWs['!freeze'] = JSON.parse(JSON.stringify(freeze));
+                    }
+                } else {
+                    targetWs['!freeze'] = JSON.parse(JSON.stringify(sourceWs['!freeze']));
+                }
+            }
+
+            // --- 筛选状态、视图、富文本数据 ---
+            var simpleProps = ['!filter', '!sheetView', '!data', '!colInfos', '!outline'];
+            simpleProps.forEach(function(prop) {
+                if (sourceWs[prop]) {
+                    targetWs[prop] = JSON.parse(JSON.stringify(sourceWs[prop]));
+                }
+            });
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // SECTION: Loading/Progress 管理函数
+        // ═══════════════════════════════════════════════════════════════
+
+        /**
+         * 显示 loading 遮罩层
+         * @param {string} [text='处理中...'] - 提示文字
+         */
+        function showLoading(text) {
+            var loading = document.getElementById('loading');
+            var loadingText = document.getElementById('loadingText');
+            var progressBarFill = document.getElementById('progressBarFill');
+            loading.style.display = 'flex';
+            loadingText.textContent = text || '处理中...';
+            progressBarFill.style.width = '0%';
+            document.getElementById('resultSummary').style.display = 'none';
+            document.getElementById('fileListCard').style.display = 'none';
+            document.getElementById('downloadBtn').style.display = 'none';
+        }
+
+        /**
+         * 隐藏 loading 遮罩层
+         */
+        function hideLoading() {
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        /**
+         * 更新进度条
+         * @param {number} percent - 百分比 (0-100)
+         * @param {string} [text] - 可选的进度文字
+         */
+        function updateProgress(percent, text) {
+            document.getElementById('progressBarFill').style.width = percent + '%';
+            if (text) {
+                document.getElementById('loadingText').textContent = text;
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // SECTION: 全局变量
+        // ═══════════════════════════════════════════════════════════════
+
+        // 全局变量 - DOM元素引用
+        let uploadArea = null;
+        let fileInput = null;
+
+        // 初始化函数（DOM加载后执行）
+        function initializeApp() {
+            // 获取DOM元素
+            uploadArea = document.getElementById('uploadArea');
+            fileInput = document.getElementById('fileInput');
+            
+            // 验证元素是否存在
+            if (!uploadArea || !fileInput) {
+                alert('页面初始化失败：关键元素未找到');
+                return;
+            }
+            
+            // 注意：不再需要点击事件监听器
+            // Label标签会自动触发fileInput，这是HTML原生行为
+            
+            // 页面刷新/关闭前提示（防止误操作丢失数据）
+            window.addEventListener('beforeunload', (e) => {
+                // 如果有正在处理的数据或生成的文件，提示用户
+                if (workbook || uploadedFiles.length > 0 || generatedFiles.length > 0) {
+                    e.preventDefault();
+                    e.returnValue = '您有未保存的数据，确定要离开吗？';
+                    return e.returnValue;
+                }
+            });
+            
+            // 拖拽上传功能（仍然保留）
+            uploadArea.addEventListener('dragover', function(e) {
                 e.preventDefault();
-                e.returnValue = '您有未保存的数据，确定要离开吗？';
-                return e.returnValue;
+                e.stopPropagation();
+                uploadArea.classList.add('dragover');
+            });
+
+            uploadArea.addEventListener('dragleave', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                uploadArea.classList.remove('dragover');
+            });
+
+            uploadArea.addEventListener('drop', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                uploadArea.classList.remove('dragover');
+                var files = e.dataTransfer.files;
+                
+                // 手动设置文件到input
+                if (files.length > 0) {
+                    var dataTransfer = new DataTransfer();
+                    for (var i = 0; i < files.length; i++) {
+                        dataTransfer.items.add(files[i]);
+                    }
+                    fileInput.files = dataTransfer.files;
+                    
+                    // 触发change事件
+                    var event = new Event('change', { bubbles: true });
+                    fileInput.dispatchEvent(event);
+                }
+            });
+
+            // 文件选择变化监听
+            fileInput.addEventListener('change', function(e) {
+                if (e.target.files.length > 0) {
+                    if (currentMode.startsWith('split')) {
+                        handleSplitFile(e.target.files[0]);
+                    } else {
+                        handleMergeFiles(e.target.files);
+                    }
+                }
+            });
+            
+            // 表头行数变化监听（使用 input 事件实现实时响应）
+            var splitHeaderRowsEl = document.getElementById('splitHeaderRows');
+            var splitVerticalHeaderRowsEl = document.getElementById('splitVerticalHeaderRows');
+            
+            if (splitHeaderRowsEl) {
+                // input 事件：每次输入都实时响应
+                splitHeaderRowsEl.addEventListener('input', function() {
+                    if (currentMode === 'split-column' && selectedSheetForColumn) {
+                        displayColumns();
+                    }
+                });
+                // change 事件：失焦时也触发（兼容鼠标点击增减按钮）
+                splitHeaderRowsEl.addEventListener('change', function() {
+                    if (currentMode === 'split-column' && selectedSheetForColumn) {
+                        displayColumns();
+                    }
+                });
             }
-        });
+
+            if (splitVerticalHeaderRowsEl) {
+                splitVerticalHeaderRowsEl.addEventListener('input', function() {
+                    if (currentMode === 'split-column-vertical' && selectedSheetForColumn) {
+                        displayVerticalColumns();
+                    }
+                });
+                splitVerticalHeaderRowsEl.addEventListener('change', function() {
+                    if (currentMode === 'split-column-vertical' && selectedSheetForColumn) {
+                        displayVerticalColumns();
+                    }
+                });
+            }
+        }
         
-        uploadArea.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            uploadArea.classList.add('dragover');
-        });
-
-        uploadArea.addEventListener('dragleave', () => {
-            uploadArea.classList.remove('dragover');
-        });
-
-        uploadArea.addEventListener('drop', (e) => {
-            e.preventDefault();
-            uploadArea.classList.remove('dragover');
-            const files = e.dataTransfer.files;
-            if (files.length > 0) {
-                if (currentMode.startsWith('split')) {
-                    handleSplitFile(files[0]);
-                } else {
-                    handleMergeFiles(files);
-                }
-            }
-        });
-
-        fileInput.addEventListener('change', (e) => {
-            if (e.target.files.length > 0) {
-                if (currentMode.startsWith('split')) {
-                    handleSplitFile(e.target.files[0]);
-                } else {
-                    handleMergeFiles(e.target.files);
-                }
-            }
-        });
-
-        document.getElementById('splitHeaderRows').addEventListener('change', function() {
-            if (currentMode === 'split-column' && selectedSheetForColumn) {
-                displayColumns();
-            }
-        });
-
-        document.getElementById('splitVerticalHeaderRows').addEventListener('change', function() {
-            if (currentMode === 'split-column-vertical' && selectedSheetForColumn) {
-                displayVerticalColumns();
-            }
-        });
+        // 尝试立即初始化（如果DOM已加载）
+        if (document.readyState === 'loading') {
+            // DOM还在加载，等待DOMContentLoaded事件
+            document.addEventListener('DOMContentLoaded', initializeApp);
+        } else {
+            // DOM已加载完成，直接初始化
+            initializeApp();
+        }
 
         function switchMode(mode) {
             currentMode = mode;
@@ -1035,7 +1395,7 @@
         }
 
         function getMergeOutputFileName() {
-            const firstFile = uploadedFiles[0]?.name || 'merged';
+            const firstFile = (uploadedFiles[0] && uploadedFiles[0].name) || 'merged';
             return `${sanitizeFileName(`${getBaseFileName(firstFile)}_${getTimestampString()}`)}.xlsx`;
         }
 
@@ -1073,7 +1433,7 @@
         }
 
         function getWorkbookSheetCount(targetWorkbook) {
-            return Array.isArray(targetWorkbook?.SheetNames) ? targetWorkbook.SheetNames.length : 0;
+            return Array.isArray(targetWorkbook && targetWorkbook.SheetNames) ? targetWorkbook.SheetNames.length : 0;
         }
 
         function getSourceLabel(fileName, sheetName) {
@@ -1127,6 +1487,68 @@
             return rows.reduce((max, row) => Math.max(max, Array.isArray(row) ? row.length : 0), 0);
         }
 
+        /**
+         * 验证表头一致性（改进版）
+         * 不仅检查列数和签名，还检查列顺序和列名
+         * @returns {Object} { valid: boolean, reason: string, details: Array }
+         */
+        function validateHeaderConsistency(baselineRows, currentRows, headerRows) {
+            if (headerRows <= 0) {
+                return { valid: true, reason: '', details: [] };
+            }
+
+            const baselineHeaders = baselineRows.slice(0, headerRows);
+            const currentHeaders = currentRows.slice(0, headerRows);
+
+            // 检查列数
+            const baselineMaxCol = getMaxColumnCount(baselineHeaders);
+            const currentMaxCol = getMaxColumnCount(currentHeaders);
+
+            if (baselineMaxCol !== currentMaxCol) {
+                return {
+                    valid: false,
+                    reason: `列数不一致：基准表有 ${baselineMaxCol} 列，当前表有 ${currentMaxCol} 列`,
+                    details: []
+                };
+            }
+
+            // 逐行逐列检查表头内容
+            const details = [];
+            for (let rowIdx = 0; rowIdx < headerRows; rowIdx++) {
+                const baselineRow = baselineHeaders[rowIdx] || [];
+                const currentRow = currentHeaders[rowIdx] || [];
+
+                for (let colIdx = 0; colIdx < baselineMaxCol; colIdx++) {
+                    const baselineValue = baselineRow[colIdx];
+                    const currentValue = currentRow[colIdx];
+
+                    // 统一处理 undefined、null、空字符串
+                    const normalizedBaseline = (baselineValue === undefined || baselineValue === null || baselineValue === '') ? '' : String(baselineValue);
+                    const normalizedCurrent = (currentValue === undefined || currentValue === null || currentValue === '') ? '' : String(currentValue);
+
+                    if (normalizedBaseline !== normalizedCurrent) {
+                        details.push({
+                            row: rowIdx + 1,
+                            column: colIdx + 1,
+                            expected: normalizedBaseline || '(空)',
+                            actual: normalizedCurrent || '(空)'
+                        });
+                    }
+                }
+            }
+
+            if (details.length > 0) {
+                const firstDetail = details[0];
+                return {
+                    valid: false,
+                    reason: `第 ${firstDetail.row} 行第 ${firstDetail.column} 列不匹配：期望"${firstDetail.expected}"，实际"${firstDetail.actual}"`,
+                    details: details
+                };
+            }
+
+            return { valid: true, reason: '', details: [] };
+        }
+
         function isWorksheetEffectivelyEmpty(worksheet) {
             if (!worksheet || !worksheet['!ref']) {
                 return true;
@@ -1140,89 +1562,158 @@
             return rows.every(row => Array.isArray(row) && row.every(cell => cell === undefined || cell === null || cell === ''));
         }
 
-        function handleSplitFile(file) {
-            const fileName = file.name.toLowerCase();
-            if (!fileName.endsWith('.xlsx') && !fileName.endsWith('.xls')) {
-                showToast('请上传Excel文件（.xlsx或.xls格式）', 'error');
-                return;
-            }
-
-            originalFileName = file.name.replace(/\.[^/.]+$/, '');
-            originalFileType = fileName.endsWith('.xlsx') ? 'xlsx' : 'xls';
-            isXlsFile = fileName.endsWith('.xls');
-            const boundaryWarnings = [];
-
-            if (file.size > MAX_SINGLE_FILE_BYTES) {
-                addBoundaryWarning(boundaryWarnings, '文件超过 20MB 建议上限，处理时可能出现卡顿或失败');
-            }
-
-            showToast(isXlsFile ? '正在转换 XLS 文件格式...' : '正在解析文件...', 'info');
-
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    const data = new Uint8Array(e.target.result);
+        /**
+         * 验证Excel文件的魔术字节
+         * @param {File} file - 文件对象
+         * @returns {Promise<boolean>} 是否为有效的Excel文件
+         */
+        async function validateExcelFileByMagicBytes(file) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const arr = new Uint8Array(e.target.result);
                     
-                    // 使用统一的读取选项
-                    const rawWorkbook = XLSX.read(data, XLSX_READ_OPTIONS);
-                    
-                    // 如果是 XLS 文件，转换为 XLSX 格式以确保格式统一
-                    if (isXlsFile) {
-                        workbook = convertWorkbookToXlsxFormat(rawWorkbook);
-                        console.log(`XLS 文件已转换为 XLSX 格式: ${file.name}`);
-                    } else {
-                        workbook = rawWorkbook;
+                    // XLSX文件以 PK (0x50 0x4B) 开头 (ZIP格式)
+                    if (arr[0] === 0x50 && arr[1] === 0x4B) {
+                        resolve(true);
+                        return;
                     }
                     
-                    document.getElementById('fileName').textContent = file.name;
-                    const fileSizeText = formatFileSize(file.size);
-                    const convertedText = isXlsFile ? ' (已转换为 XLSX 格式)' : '';
-                    document.getElementById('fileSize').textContent = fileSizeText + convertedText;
-                    document.getElementById('fileInfo').style.display = 'flex';
+                    // XLS文件以 D0 CF 11 E0 开头 (OLE格式)
+                    if (arr[0] === 0xD0 && arr[1] === 0xCF && 
+                        arr[2] === 0x11 && arr[3] === 0xE0) {
+                        resolve(true);
+                        return;
+                    }
+                    
+                    resolve(false);
+                };
+                reader.onerror = function() {
+                    resolve(false);
+                };
+                reader.readAsArrayBuffer(file.slice(0, 4));
+            });
+        }
 
-                    if (getWorkbookSheetCount(workbook) > MAX_SHEET_COUNT) {
-                        addBoundaryWarning(boundaryWarnings, '工作表数量超过 200 的建议上限，处理时间可能较长');
-                    }
-                    
-                    let step2TitleText = '选择工作表（仅能选择一张）';
-                    if (currentMode === 'split-sheet') {
-                        step2TitleText = '选择工作表（已默认全选）';
-                    } else if (currentMode === 'split-column-vertical') {
-                        step2TitleText = '选择工作表（竖向拆分只能选择一张）';
-                    }
-                    document.getElementById('step2Title').textContent = step2TitleText;
-                    
-                    displaySplitSheets();
-                    goToStep(2);
-                    showToast(isXlsFile ? 'XLS 文件转换成功！' : '文件解析成功！', 'success');
-                    showBoundaryWarnings(boundaryWarnings);
-                } catch (error) {
-                    console.error('文件解析错误:', error);
-                    showToast('文件解析失败，请检查文件格式', 'error');
+        async function handleSplitFile(file) {
+            try {
+                const fileName = file.name.toLowerCase();
+                if (!fileName.endsWith('.xlsx') && !fileName.endsWith('.xls')) {
+                    showToast('请上传Excel文件（.xlsx或.xls格式）', 'error');
+                    return;
                 }
-            };
-            reader.onerror = function(error) {
-                console.error('文件读取错误:', error);
-                showToast('文件读取失败', 'error');
-            };
-            reader.readAsArrayBuffer(file);
+
+                // 验证文件魔术字节
+                const isValidFile = await validateExcelFileByMagicBytes(file);
+                
+                if (!isValidFile) {
+                    showToast('文件内容格式不正确，请上传有效的Excel文件', 'error');
+                    return;
+                }
+
+                originalFileName = file.name.replace(/\.[^/.]+$/, '');
+                originalFileType = fileName.endsWith('.xlsx') ? 'xlsx' : 'xls';
+                isXlsFile = fileName.endsWith('.xls');
+                const boundaryWarnings = [];
+
+                // 硬性限制检查：超过50MB拒绝处理
+                if (file.size > HARD_LIMIT_FILE_BYTES) {
+                    showToast(`文件过大（${formatFileSize(file.size)}），超过硬性限制（${formatFileSize(HARD_LIMIT_FILE_BYTES)}），可能导致浏览器崩溃。请使用专业工具处理后重试。`, 'error');
+                    return;
+                }
+
+                // 软性警告：超过20MB提示
+                if (file.size > MAX_SINGLE_FILE_BYTES) {
+                    addBoundaryWarning(boundaryWarnings, '文件超过 20MB 建议上限，处理时可能出现卡顿');
+                }
+
+                showToast(isXlsFile ? '正在转换 XLS 文件格式...' : '正在解析文件...', 'info');
+
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const data = new Uint8Array(e.target.result);
+                        
+                        // 使用统一的读取选项
+                        const rawWorkbook = XLSX.read(data, XLSX_READ_OPTIONS);
+                        
+                        // 如果是 XLS 文件，转换为 XLSX 格式以确保格式统一
+                        if (isXlsFile) {
+                            workbook = convertWorkbookToXlsxFormat(rawWorkbook);
+                        } else {
+                            workbook = rawWorkbook;
+                        }
+                        
+                        document.getElementById('fileName').textContent = file.name;
+                        const fileSizeText = formatFileSize(file.size);
+                        const convertedText = isXlsFile ? ' (已转换为 XLSX 格式)' : '';
+                        document.getElementById('fileSize').textContent = fileSizeText + convertedText;
+                        document.getElementById('fileInfo').style.display = 'flex';
+
+                        if (getWorkbookSheetCount(workbook) > MAX_SHEET_COUNT) {
+                            addBoundaryWarning(boundaryWarnings, '工作表数量超过 200 的建议上限，处理时间可能较长');
+                        }
+                        
+                        let step2TitleText = '选择工作表（仅能选择一张）';
+                        if (currentMode === 'split-sheet') {
+                            step2TitleText = '选择工作表（已默认全选）';
+                        } else if (currentMode === 'split-column-vertical') {
+                            step2TitleText = '选择工作表（竖向拆分只能选择一张）';
+                        }
+                        document.getElementById('step2Title').textContent = step2TitleText;
+                        
+                        displaySplitSheets();
+                        goToStep(2);
+                        
+                        showToast(isXlsFile ? 'XLS 文件转换成功！' : '文件解析成功！', 'success');
+                        showBoundaryWarnings(boundaryWarnings);
+                    } catch (error) {
+                        console.error('文件解析错误:', error);
+                        showToast('文件解析失败: ' + error.message + '（请按F12查看控制台获取详细信息）', 'error');
+                    }
+                };
+                reader.onerror = function() {
+                    showToast('文件读取失败', 'error');
+                };
+                reader.readAsArrayBuffer(file);
+                
+            } catch (error) {
+                console.error('handleSplitFile 错误:', error);
+                showToast('处理文件时出错: ' + error.message, 'error');
+            }
         }
 
         async function handleMergeFiles(files) {
-            const validFiles = Array.from(files).filter(file => {
+            const filesWithExtension = Array.from(files).filter(file => {
                 const fileName = file.name.toLowerCase();
                 return fileName.endsWith('.xlsx') || fileName.endsWith('.xls');
             });
 
-            if (validFiles.length === 0) {
+            if (filesWithExtension.length === 0) {
                 showToast('请上传Excel文件（.xlsx或.xls格式）', 'error');
+                return;
+            }
+
+            // 验证文件魔术字节
+            const validFiles = [];
+            for (const file of filesWithExtension) {
+                const isValid = await validateExcelFileByMagicBytes(file);
+                if (isValid) {
+                    validFiles.push(file);
+                } else {
+                    showToast(`文件 ${file.name} 内容格式不正确，已跳过`, 'warning');
+                }
+            }
+
+            if (validFiles.length === 0) {
+                showToast('没有有效的Excel文件', 'error');
                 return;
             }
 
             const boundaryWarnings = [];
             const existingFileCount = uploadedFiles.length;
             const totalFileCount = existingFileCount + validFiles.length;
-            const existingTotalSize = uploadedFiles.reduce((sum, file) => sum + (file.file?.size || 0), 0);
+            const existingTotalSize = uploadedFiles.reduce((sum, file) => sum + ((file.file && file.file.size) || 0), 0);
             const totalSize = existingTotalSize + validFiles.reduce((sum, file) => sum + file.size, 0);
 
             if (totalFileCount > MAX_FILE_COUNT) {
@@ -1273,90 +1764,41 @@
 
         /**
          * 深度复制工作表，确保所有格式被保留
+         * @param {Object} worksheet - 源工作表对象
+         * @returns {Object} 深拷贝后的新工作表
          */
         function cloneWorksheet(worksheet) {
             const newWorksheet = {};
-            
+
             // 复制所有单元格数据和格式
             const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
             for (let R = range.s.r; R <= range.e.r; ++R) {
                 for (let C = range.s.c; C <= range.e.c; ++C) {
                     const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
-                    if (worksheet[cellAddress]) {
-                        // 深度复制单元格对象，确保样式被保留
-                        newWorksheet[cellAddress] = JSON.parse(JSON.stringify(worksheet[cellAddress]));
+                    newWorksheet[cellAddress] = deepCopyCell(worksheet[cellAddress]);
+                }
+            }
+
+            // 检查 !ref 范围外的稀疏单元格（合并区域引用的单元格等）
+            if (worksheet['!merges']) {
+                for (const merge of worksheet['!merges']) {
+                    for (let mr = merge.s.r; mr <= merge.e.r; mr++) {
+                        for (let mc = merge.s.c; mc <= merge.e.c; mc++) {
+                            const addr = XLSX.utils.encode_cell({ r: mr, c: mc });
+                            if (worksheet[addr] && !newWorksheet[addr]) {
+                                newWorksheet[addr] = deepCopyCell(worksheet[addr]);
+                            }
+                        }
                     }
                 }
             }
-            
+
             // 复制范围定义
             newWorksheet['!ref'] = worksheet['!ref'];
-            
-            // 复制列宽
-            if (worksheet['!cols']) {
-                newWorksheet['!cols'] = JSON.parse(JSON.stringify(worksheet['!cols']));
-            }
-            
-            // 复制行高
-            if (worksheet['!rows']) {
-                newWorksheet['!rows'] = JSON.parse(JSON.stringify(worksheet['!rows']));
-            }
-            
-            // 复制合并单元格
-            if (worksheet['!merges']) {
-                newWorksheet['!merges'] = JSON.parse(JSON.stringify(worksheet['!merges']));
-            }
-            
-            // 复制页面边距
-            if (worksheet['!margins']) {
-                newWorksheet['!margins'] = JSON.parse(JSON.stringify(worksheet['!margins']));
-            }
-            
-            // 复制保护设置
-            if (worksheet['!protect']) {
-                newWorksheet['!protect'] = JSON.parse(JSON.stringify(worksheet['!protect']));
-            }
-            
-            // 复制自动筛选
-            if (worksheet['!autofilter']) {
-                newWorksheet['!autofilter'] = JSON.parse(JSON.stringify(worksheet['!autofilter']));
-            }
-            
-            // 复制超链接
-            if (worksheet['!hyperlinks']) {
-                newWorksheet['!hyperlinks'] = JSON.parse(JSON.stringify(worksheet['!hyperlinks']));
-            }
-            
-            // 复制页面设置
-            if (worksheet['!pageSetup']) {
-                newWorksheet['!pageSetup'] = JSON.parse(JSON.stringify(worksheet['!pageSetup']));
-            }
-            
-            // 复制打印选项
-            if (worksheet['!printOptions']) {
-                newWorksheet['!printOptions'] = JSON.parse(JSON.stringify(worksheet['!printOptions']));
-            }
-            
-            // 复制条件格式
-            if (worksheet['!conditionalFormatting']) {
-                newWorksheet['!conditionalFormatting'] = JSON.parse(JSON.stringify(worksheet['!conditionalFormatting']));
-            }
-            
-            // 复制数据验证
-            if (worksheet['!dataValidation']) {
-                newWorksheet['!dataValidation'] = JSON.parse(JSON.stringify(worksheet['!dataValidation']));
-            }
-            
-            // 复制冻结窗格
-            if (worksheet['!freeze']) {
-                newWorksheet['!freeze'] = JSON.parse(JSON.stringify(worksheet['!freeze']));
-            }
-            
-            // 复制筛选状态
-            if (worksheet['!filter']) {
-                newWorksheet['!filter'] = JSON.parse(JSON.stringify(worksheet['!filter']));
-            }
-            
+
+            // 使用公共函数复制所有工作表属性
+            copyWorksheetProperties(worksheet, newWorksheet);
+
             return newWorksheet;
         }
 
@@ -1459,6 +1901,11 @@
 
         function displaySplitSheets() {
             const sheetList = document.getElementById('sheetList');
+            
+            if (!sheetList) {
+                return;
+            }
+            
             sheetList.innerHTML = '';
             selectedSheets.clear();
             selectedSheetForColumn = null;
@@ -1642,23 +2089,48 @@
             }
 
             const headerRows = getHeaderRowCount('splitHeaderRows');
-            const headers = jsonData[headerRows - 1] || [];
             const columnList = document.getElementById('columnList');
             columnList.innerHTML = '';
             
             for (let index = 0; index < columnCount; index++) {
-                const header = headers[index];
+                // 构建列显示名称：合并所有表头行的内容
+                let columnDisplayParts = [];
+                for (let rowIdx = 0; rowIdx < headerRows; rowIdx++) {
+                    const rowData = jsonData[rowIdx] || [];
+                    const cellValue = rowData[index];
+                    if (cellValue !== undefined && cellValue !== null && cellValue !== '') {
+                        columnDisplayParts.push(String(cellValue));
+                    }
+                }
+                
+                // 如果表头行为0或所有行都为空，使用默认列名
+                let columnDisplayName;
+                if (columnDisplayParts.length === 0) {
+                    columnDisplayName = `列 ${index + 1}`;
+                } else {
+                    // 多行表头用 "/" 分隔显示
+                    columnDisplayName = columnDisplayParts.join(' / ');
+                }
+                
                 const columnItem = document.createElement('div');
                 columnItem.className = 'sheet-item';
                 columnItem.innerHTML = `
-                    <div class="sheet-name">${header !== undefined && header !== '' ? escapeHtml(header) : `列 ${index + 1}`}</div>
+                    <div class="sheet-name">${escapeHtml(columnDisplayName)}</div>
                 `;
                 columnItem.onclick = () => selectColumn(index, columnItem);
                 columnList.appendChild(columnItem);
             }
             
+            // 重置选中的拆分列
             splitColumn = null;
             document.getElementById('step3Next').disabled = true;
+            
+            // 显示数据预览信息，帮助用户理解表头区域和数据区域
+            const dataStartRow = headerRows + 1;
+            const totalRows = jsonData.length;
+            const dataRowCount = totalRows - headerRows;
+            
+            showToast(`表头: ${headerRows}行 | 数据: ${dataRowCount}行 (从第${dataStartRow}行开始)`, 'info');
         }
 
         function selectColumn(index, element) {
@@ -1691,19 +2163,34 @@
             }
 
             const headerRows = getHeaderRowCount('splitVerticalHeaderRows');
-            const headers = jsonData[headerRows - 1] || [];
+            
+            // 构建列显示名称的辅助函数：合并所有表头行的内容
+            function buildColumnDisplayName(colIndex) {
+                let columnDisplayParts = [];
+                for (let rowIdx = 0; rowIdx < headerRows; rowIdx++) {
+                    const rowData = jsonData[rowIdx] || [];
+                    const cellValue = rowData[colIndex];
+                    if (cellValue !== undefined && cellValue !== null && cellValue !== '') {
+                        columnDisplayParts.push(String(cellValue));
+                    }
+                }
+                if (columnDisplayParts.length === 0) {
+                    return `列 ${colIndex + 1}`;
+                }
+                return columnDisplayParts.join(' / ');
+            }
             
             // 渲染固定表头列选择
             const keyColumnList = document.getElementById('verticalKeyColumnList');
             keyColumnList.innerHTML = '';
             
             for (let index = 0; index < columnCount; index++) {
-                const header = headers[index];
+                const columnDisplayName = buildColumnDisplayName(index);
                 const columnItem = document.createElement('div');
                 columnItem.className = 'sheet-item';
                 columnItem.innerHTML = `
                     <input type="checkbox" class="sheet-checkbox" id="vertical-key-col-${index}" data-column="${index}" onchange="toggleVerticalKeyColumn(${index}, this)">
-                    <label for="vertical-key-col-${index}" class="sheet-name">${header !== undefined && header !== '' ? escapeHtml(header) : `列 ${index + 1}`}</label>
+                    <label for="vertical-key-col-${index}" class="sheet-name">${escapeHtml(columnDisplayName)}</label>
                 `;
                 keyColumnList.appendChild(columnItem);
             }
@@ -1713,12 +2200,12 @@
             columnList.innerHTML = '';
             
             for (let index = 0; index < columnCount; index++) {
-                const header = headers[index];
+                const columnDisplayName = buildColumnDisplayName(index);
                 const columnItem = document.createElement('div');
                 columnItem.className = 'sheet-item';
                 columnItem.innerHTML = `
                     <input type="checkbox" class="sheet-checkbox" id="vertical-col-${index}" data-column="${index}" onchange="toggleVerticalColumn(${index}, this)">
-                    <label for="vertical-col-${index}" class="sheet-name">${header !== undefined && header !== '' ? escapeHtml(header) : `列 ${index + 1}`}</label>
+                    <label for="vertical-col-${index}" class="sheet-name">${escapeHtml(columnDisplayName)}</label>
                 `;
                 columnList.appendChild(columnItem);
             }
@@ -1728,6 +2215,13 @@
             selectedVerticalColumns = [];
             updateVerticalSelectedCount();
             document.getElementById('step3Next').disabled = true;
+            
+            // 显示数据预览信息，帮助用户理解表头区域和数据区域
+            const dataStartRow = headerRows + 1;
+            const totalRows = jsonData.length;
+            const dataRowCount = totalRows - headerRows;
+            
+            showToast(`表头: ${headerRows}行 | 数据: ${dataRowCount}行 (从第${dataStartRow}行开始)`, 'info');
         }
 
         function toggleVerticalKeyColumn(index, checkbox) {
@@ -1824,7 +2318,36 @@
             return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
         }
 
+        /**
+         * 更新步骤指示器的UI状态
+         * @param {number} currentStep - 当前步骤号（1-4）
+         */
+        function updateStepUI(currentStep) {
+            // 切换步骤内容面板
+            document.querySelectorAll('.step-content').forEach(function(content) {
+                content.classList.remove('active');
+            });
+            var stepEl = document.getElementById('step' + currentStep);
+            if (stepEl) stepEl.classList.add('active');
+
+            // 更新步骤指示器
+            document.querySelectorAll('.step').forEach(function(stepEl) {
+                var stepNum = parseInt(stepEl.dataset.step);
+                stepEl.classList.remove('active', 'completed');
+                if (stepNum < currentStep) {
+                    stepEl.classList.add('completed');
+                } else if (stepNum === currentStep) {
+                    stepEl.classList.add('active');
+                }
+            });
+        }
+
+        /**
+         * 切换到指定步骤，处理步骤特定的UI显示和操作触发
+         * @param {number} step - 目标步骤号（1-4）
+         */
         function goToStep(step) {
+            // Step 2: 显示对应的面板
             if (step === 2) {
                 if (currentMode.startsWith('split')) {
                     document.getElementById('splitStep2Card').style.display = 'block';
@@ -1834,49 +2357,36 @@
                     document.getElementById('mergeStep2Card').style.display = 'block';
                 }
             }
-            
+
+            // Step 3: 根据模式显示对应选项面板
             if (step === 3) {
+                var panels = ['splitSheetOptions', 'splitColumnOptions', 'splitColumnVerticalOptions', 'mergeFileOptions', 'mergeSheetOptions'];
+                panels.forEach(function(id) { document.getElementById(id).style.display = 'none'; });
+
                 if (currentMode === 'split-sheet') {
                     document.getElementById('step3Title').textContent = '配置工作表选择';
                     document.getElementById('splitSheetOptions').style.display = 'block';
-                    document.getElementById('splitColumnOptions').style.display = 'none';
-                    document.getElementById('splitColumnVerticalOptions').style.display = 'none';
-                    document.getElementById('mergeFileOptions').style.display = 'none';
-                    document.getElementById('mergeSheetOptions').style.display = 'none';
                     document.getElementById('step3Next').disabled = selectedSheets.size === 0;
                 } else if (currentMode === 'split-column') {
                     document.getElementById('step3Title').textContent = '选择拆分列（横向）';
-                    document.getElementById('splitSheetOptions').style.display = 'none';
                     document.getElementById('splitColumnOptions').style.display = 'block';
-                    document.getElementById('splitColumnVerticalOptions').style.display = 'none';
-                    document.getElementById('mergeFileOptions').style.display = 'none';
-                    document.getElementById('mergeSheetOptions').style.display = 'none';
                     displayColumns();
                 } else if (currentMode === 'split-column-vertical') {
                     document.getElementById('step3Title').textContent = '选择拆分列（竖向）';
-                    document.getElementById('splitSheetOptions').style.display = 'none';
-                    document.getElementById('splitColumnOptions').style.display = 'none';
                     document.getElementById('splitColumnVerticalOptions').style.display = 'block';
-                    document.getElementById('mergeFileOptions').style.display = 'none';
-                    document.getElementById('mergeSheetOptions').style.display = 'none';
                     displayVerticalColumns();
                 } else if (currentMode === 'merge-file') {
                     document.getElementById('step3Title').textContent = '配置文件合并选项';
-                    document.getElementById('splitSheetOptions').style.display = 'none';
-                    document.getElementById('splitColumnOptions').style.display = 'none';
                     document.getElementById('mergeFileOptions').style.display = 'block';
-                    document.getElementById('mergeSheetOptions').style.display = 'none';
                     displayMergeSheetSelection();
                 } else if (currentMode === 'merge-sheet') {
                     document.getElementById('step3Title').textContent = '配置工作表数据合并选项';
-                    document.getElementById('splitSheetOptions').style.display = 'none';
-                    document.getElementById('splitColumnOptions').style.display = 'none';
-                    document.getElementById('mergeFileOptions').style.display = 'none';
                     document.getElementById('mergeSheetOptions').style.display = 'block';
                     displayMergeSheetSelection();
                 }
             }
-            
+
+            // Step 4: 触发拆分或合并操作
             if (step === 4) {
                 if (currentMode.startsWith('split')) {
                     generateSplitFiles();
@@ -1884,21 +2394,9 @@
                     performMerge();
                 }
             }
-            
-            document.querySelectorAll('.step-content').forEach(content => {
-                content.classList.remove('active');
-            });
-            document.getElementById(`step${step}`).classList.add('active');
-            
-            document.querySelectorAll('.step').forEach(stepEl => {
-                const stepNum = parseInt(stepEl.dataset.step);
-                stepEl.classList.remove('active', 'completed');
-                if (stepNum < step) {
-                    stepEl.classList.add('completed');
-                } else if (stepNum === step) {
-                    stepEl.classList.add('active');
-                }
-            });
+
+            // 更新步骤指示器UI
+            updateStepUI(step);
         }
 
         function goToStepFrom2() {
@@ -2080,6 +2578,7 @@
             } catch (error) {
                 console.error('按列拆分错误:', error);
                 loading.style.display = 'none';
+                isProcessing = false;  // 重置处理标志
                 showToast('按列拆分失败: ' + error.message, 'error');
             }
         }
@@ -2087,158 +2586,121 @@
         /**
          * 执行竖向列拆分
          * 每个选中的数据列生成一个文件，包含固定表头列 + 该数据列
+         * 改进：直接操作单元格对象，完整保留样式，不使用 aoa_to_sheet
          */
         async function performVerticalColumnSplit() {
-            const loading = document.getElementById('loading');
-            const loadingText = document.getElementById('loadingText');
-            const progressBarFill = document.getElementById('progressBarFill');
-            
             try {
                 const sheetName = selectedSheetForColumn || workbook.SheetNames[0];
                 const worksheet = workbook.Sheets[sheetName];
                 const headerRows = getHeaderRowCount('splitVerticalHeaderRows');
-                
-                loadingText.textContent = '正在准备竖向拆分...';
-                progressBarFill.style.width = '10%';
+
+                showLoading('正在准备竖向拆分...');
+                updateProgress(10);
                 await new Promise(resolve => setTimeout(resolve, 100));
-                
+
                 const range = XLSX.utils.decode_range(worksheet['!ref']);
                 const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-                
+
                 if (jsonData.length === 0) {
                     throw new Error('工作表为空');
                 }
-                
+
                 // 获取列标题
                 const headers = jsonData[headerRows - 1] || [];
-                
+
                 const zip = new JSZip();
                 generatedFiles = [];
                 const usedFileNames = [];
                 let fileCount = 0;
                 let totalSize = 0;
-                
-                loadingText.textContent = '正在生成拆分文件...';
-                
+
+                updateProgress(10, '正在生成拆分文件...');
+
                 // 对每个选中的数据列生成一个文件
                 for (const dataColIndex of selectedVerticalColumns) {
                     const dataColHeader = headers[dataColIndex] || `列${dataColIndex + 1}`;
                     const fileName = ensureUniqueFileName(`${originalFileName}_${sanitizeFileName(String(dataColHeader))}.xlsx`, usedFileNames);
                     usedFileNames.push(fileName);
                     const outputColumns = [...verticalKeyColumns, dataColIndex];
-                    
+
                     const newWorkbook = XLSX.utils.book_new();
-                    
-                    // 构建新数据：固定表头列 + 数据列
-                    const newData = [];
-                    for (let rowIdx = 0; rowIdx < jsonData.length; rowIdx++) {
-                        const row = jsonData[rowIdx];
-                        const newRow = outputColumns.map(columnIndex => row[columnIndex]);
-                        newData.push(newRow);
-                    }
-                    
-                    // 先根据值创建工作表，再覆盖原始单元格，尽量保留样式
-                    const newWorksheet = XLSX.utils.aoa_to_sheet(newData);
-                    
-                    // 复制单元格格式（如果有）
-                    for (let R = 0; R < newData.length; R++) {
+                    const newWorksheet = {};
+
+                    // 直接操作单元格对象：从源工作表逐个复制保留列的单元格（含样式）
+                    const totalRows = range.e.r - range.s.r + 1;
+                    for (let R = 0; R < totalRows; R++) {
                         for (let C = 0; C < outputColumns.length; C++) {
                             const originalCol = outputColumns[C];
-                            const originalCellAddress = XLSX.utils.encode_cell({ r: R, c: originalCol });
-                            const newCellAddress = XLSX.utils.encode_cell({ r: R, c: C });
-                            
-                            if (worksheet[originalCellAddress]) {
-                                newWorksheet[newCellAddress] = JSON.parse(JSON.stringify(worksheet[originalCellAddress]));
-                            }
+                            const originalAddr = XLSX.utils.encode_cell({ r: R, c: originalCol });
+                            const newAddr = XLSX.utils.encode_cell({ r: R, c: C });
+                            newWorksheet[newAddr] = deepCopyCell(worksheet[originalAddr]);
                         }
                     }
-                    
+
                     // 设置范围
                     newWorksheet['!ref'] = XLSX.utils.encode_range({
                         s: { r: 0, c: 0 },
-                        e: { r: newData.length - 1, c: Math.max(outputColumns.length - 1, 0) }
+                        e: { r: totalRows - 1, c: Math.max(outputColumns.length - 1, 0) }
                     });
-                    
-                    // 复制列宽
-                    if (worksheet['!cols']) {
-                        const newCols = outputColumns
-                            .map(columnIndex => worksheet['!cols'][columnIndex])
-                            .filter(Boolean);
-                        if (newCols.length > 0) {
-                            newWorksheet['!cols'] = newCols;
-                        }
-                    }
-                    
-                    // 复制行高
-                    if (worksheet['!rows']) {
-                        newWorksheet['!rows'] = JSON.parse(JSON.stringify(worksheet['!rows']));
-                    }
-                    
-                    // 设置表头单元格样式
-                    for (let r = 0; r < headerRows; r++) {
-                        for (let c = 0; c < outputColumns.length; c++) {
-                            const cellAddress = XLSX.utils.encode_cell({ r: r, c: c });
-                            if (!newWorksheet[cellAddress]) {
-                                newWorksheet[cellAddress] = { v: newData[r][c], t: 's' };
-                            }
-                            // 添加表头样式
-                            if (!newWorksheet[cellAddress].s) {
-                                newWorksheet[cellAddress].s = {};
-                            }
-                            newWorksheet[cellAddress].s.font = { bold: true };
-                            newWorksheet[cellAddress].s.fill = { fgColor: { rgb: 'FFE6F3FF' } };
-                        }
-                    }
-                    
+
+                    // 使用公共函数复制列宽（选取保留列）和行高
+                    copyWorksheetProperties(worksheet, newWorksheet, {
+                        columnsToKeep: outputColumns,
+                        skipMerge: true,       // 列结构已变，合并不再有效
+                        skipCF: true,           // 条件格式范围已失效
+                        skipDV: true,           // 数据验证范围已失效
+                        skipAF: true,           // 自动筛选范围已失效
+                        skipHyperlinks: true    // 超链接可能指向其他列
+                    });
+
                     XLSX.utils.book_append_sheet(newWorkbook, newWorksheet, 'Sheet1');
-                    
+
                     // 生成文件
                     const excelBuffer = XLSX.write(newWorkbook, XLSX_WRITE_OPTIONS);
                     zip.file(fileName, excelBuffer);
-                    
+
                     generatedFiles.push({
                         name: fileName,
                         displayName: dataColHeader,
                         data: excelBuffer
                     });
-                    
+
                     totalSize += excelBuffer.length;
                     fileCount++;
-                    
-                    progressBarFill.style.width = `${10 + (fileCount / selectedVerticalColumns.length) * 80}%`;
+
+                    updateProgress(10 + (fileCount / selectedVerticalColumns.length) * 80);
                     await new Promise(resolve => setTimeout(resolve, 10));
                 }
-                
-                loadingText.textContent = '正在打包ZIP文件...';
-                progressBarFill.style.width = '90%';
+
+                updateProgress(90, '正在打包ZIP文件...');
                 await new Promise(resolve => setTimeout(resolve, 100));
-                
+
                 zipBlob = await zip.generateAsync({
                     type: 'blob',
                     compression: 'DEFLATE',
                     compressionOptions: { level: 6 }
                 });
-                
-                loadingText.textContent = '完成！';
-                progressBarFill.style.width = '100%';
+
+                updateProgress(100, '完成！');
                 await new Promise(resolve => setTimeout(resolve, 500));
-                
-                loading.style.display = 'none';
-                
+
+                hideLoading();
+
                 document.getElementById('totalFiles').textContent = fileCount;
                 document.getElementById('totalSize').textContent = formatFileSize(totalSize);
                 document.getElementById('resultSummary').style.display = 'block';
-                
+
                 renderResultFileList(generatedFiles, 'resultFileList');
                 document.getElementById('fileListCard').style.display = 'block';
                 document.getElementById('downloadBtn').style.display = 'inline-flex';
-                
-                isProcessing = false;  // 重置处理标志
+
+                isProcessing = false;
                 showToast(`成功生成 ${fileCount} 个文件！`, 'success');
-                
+
             } catch (error) {
                 console.error('竖向列拆分错误:', error);
-                loading.style.display = 'none';
+                hideLoading();
+                isProcessing = false;
                 showToast('竖向列拆分失败: ' + error.message, 'error');
             }
         }
@@ -2271,13 +2733,36 @@
             
             splitReport.totalRows = dataRows.length;
             
+            // 统计空值数量和唯一值
+            let emptyCount = 0;
             const uniqueValues = new Set();
             dataRows.forEach(row => {
                 const value = row[splitColumn];
-                uniqueValues.add(value !== undefined && value !== '' ? String(value) : '空');
+                // 改进的空值判断：包括空白字符
+                const trimmedValue = (typeof value === 'string') ? value.trim() : value;
+                
+                if (trimmedValue === undefined || trimmedValue === null || trimmedValue === '') {
+                    emptyCount++;
+                    uniqueValues.add('[空值]');
+                } else {
+                    uniqueValues.add(String(value));
+                }
             });
             
             splitReport.uniqueValueCount = uniqueValues.size;
+            splitReport.emptyValueCount = emptyCount;
+            
+            // 如果空值较多，提示用户
+            if (emptyCount > 0 && emptyCount > dataRows.length * 0.1) {
+                const percentage = (emptyCount / dataRows.length * 100).toFixed(1);
+                showToast(`拆分列中有 ${emptyCount} 行空值（${percentage}%），这些数据将被归类到"[空值]"文件中`, 'warning');
+            }
+            
+            // 限制唯一值数量，防止生成过多文件
+            const MAX_UNIQUE_VALUES = 500;
+            if (uniqueValues.size > MAX_UNIQUE_VALUES) {
+                throw new Error(`拆分列有 ${uniqueValues.size} 个唯一值，超过上限 ${MAX_UNIQUE_VALUES}，可能导致浏览器崩溃。请选择其他列或先手动筛选数据。`);
+            }
             
             return {
                 sheetName,
@@ -2300,7 +2785,12 @@
             
             const groups = {};
             dataRowsWithIndex.forEach(({ row, originalIndex }) => {
-                const key = row[splitColumn] !== undefined && row[splitColumn] !== '' ? String(row[splitColumn]) : '空';
+                const value = row[splitColumn];
+                // 改进的空值判断：包括空白字符
+                const trimmedValue = (typeof value === 'string') ? value.trim() : value;
+                const key = (trimmedValue !== undefined && trimmedValue !== null && trimmedValue !== '') 
+                    ? String(value) 
+                    : '[空值]';
                 if (!groups[key]) {
                     groups[key] = [];
                 }
@@ -2319,73 +2809,38 @@
         }
 
         /**
+        /**
          * 从源工作表复制指定行到新工作表，保留所有格式
+         * @param {Object} worksheet - 源工作表
+         * @param {Array<number>} rowsToKeep - 保留的行号数组（0-based，已排序）
+         * @returns {Object} 新工作表
          */
         function copyWorksheetWithFilteredRows(worksheet, rowsToKeep) {
             const newWorksheet = {};
             const originalRange = XLSX.utils.decode_range(worksheet['!ref']);
-            
-            // 复制单元格数据
+
+            // 复制单元格数据（使用安全深拷贝）
             for (let R = 0; R < rowsToKeep.length; ++R) {
                 const originalRow = rowsToKeep[R];
                 for (let C = originalRange.s.c; C <= originalRange.e.c; ++C) {
                     const originalCellAddress = XLSX.utils.encode_cell({ r: originalRow, c: C });
                     const newCellAddress = XLSX.utils.encode_cell({ r: R, c: C });
-                    
-                    if (worksheet[originalCellAddress]) {
-                        newWorksheet[newCellAddress] = JSON.parse(JSON.stringify(worksheet[originalCellAddress]));
-                    }
+                    newWorksheet[newCellAddress] = deepCopyCell(worksheet[originalCellAddress]);
                 }
             }
-            
+
             // 设置新范围
-            const newRange = XLSX.utils.encode_range({
+            newWorksheet['!ref'] = XLSX.utils.encode_range({
                 s: { r: 0, c: originalRange.s.c },
                 e: { r: rowsToKeep.length - 1, c: originalRange.e.c }
             });
-            newWorksheet['!ref'] = newRange;
-            
-            // 复制列宽
-            if (worksheet['!cols']) {
-                newWorksheet['!cols'] = JSON.parse(JSON.stringify(worksheet['!cols']));
-            }
-            
-            // 复制行高（仅保留筛选后的行）
-            if (worksheet['!rows']) {
-                const rowsToCopy = [];
-                for (let i = 0; i < rowsToKeep.length && i < worksheet['!rows'].length; ++i) {
-                    rowsToCopy.push(worksheet['!rows'][rowsToKeep[i]]);
-                }
-                newWorksheet['!rows'] = JSON.parse(JSON.stringify(rowsToCopy));
-            }
-            
-            // 复制合并单元格（调整行号）
-            if (worksheet['!merges']) {
-                const newMerges = [];
-                for (const merge of worksheet['!merges']) {
-                    if (rowsToKeep.includes(merge.s.r) && rowsToKeep.includes(merge.e.r)) {
-                        const newMerge = {
-                            s: { r: rowsToKeep.indexOf(merge.s.r), c: merge.s.c },
-                            e: { r: rowsToKeep.indexOf(merge.e.r), c: merge.e.c }
-                        };
-                        newMerges.push(newMerge);
-                    }
-                }
-                if (newMerges.length > 0) {
-                    newWorksheet['!merges'] = newMerges;
-                }
-            }
-            
-            // 复制其他属性
-            const propertiesToCopy = ['!margins', '!protect', '!autofilter', '!hyperlinks', 
-                                     '!data', '!pageSetup', '!printOptions', 
-                                     '!conditionalFormatting', '!dataValidation'];
-            propertiesToCopy.forEach(prop => {
-                if (worksheet[prop]) {
-                    newWorksheet[prop] = JSON.parse(JSON.stringify(worksheet[prop]));
-                }
+
+            // 使用公共函数复制所有工作表属性（含行号映射）
+            copyWorksheetProperties(worksheet, newWorksheet, {
+                rowsToKeep: rowsToKeep,
+                checkFreezeRow: true
             });
-            
+
             return newWorksheet;
         }
 
@@ -2565,24 +3020,31 @@
             mergedFileName = getMergeOutputFileName();
         }
 
+        /**
+         * 工作表数据合并（改进版）
+         * 以第一个非空Sheet为基准，保留其格式；后续Sheet的数据行逐个复制样式
+         * 改进：移除 aoa_to_sheet，改为直接操作单元格对象保留样式
+         */
         async function performSheetDataMerge(loadingText, progressBarFill) {
             loadingText.textContent = '正在合并工作表数据...';
             progressBarFill.style.width = '10%';
-            
+
             await new Promise(resolve => setTimeout(resolve, 100));
 
             const headerRows = getHeaderRowCount('headerRows');
-            
             const mergedWorkbook = XLSX.utils.book_new();
-            const mergedData = [];
+            const mergedWorksheet = {}; // 直接操作单元格对象
             let sheetCount = 0;
             const totalSheets = selectedSheets.size;
             let firstSheet = true;
-            let baselineHeaderSignature = null;
+            let baselineJsonData = null;
             let baselineColumnCount = null;
-            
+            let mergedRowCount = 0; // 当前合并后的总行数
+            let baselineRange = null; // 基准Sheet的范围
+            let baselineWorksheet = null; // 基准工作表引用
+
             loadingText.textContent = `正在处理工作表 1/${totalSheets}...`;
-            
+
             for (const key of selectedSheets) {
                 const { fileIndex, sheetName } = parseMergeSelectionKey(key);
                 const uploadedFile = uploadedFiles[fileIndex];
@@ -2595,104 +3057,130 @@
                     await new Promise(resolve => setTimeout(resolve, 10));
                     continue;
                 }
-                
-                const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-                
-                const headerRowsToKeep = Math.min(headerRows, jsonData.length);
-                const currentHeaderSignature = getSheetStructureSignature(jsonData, headerRowsToKeep);
-                const currentColumnCount = getMaxColumnCount(jsonData);
-                
-                if (firstSheet) {
-                    baselineHeaderSignature = currentHeaderSignature;
-                    baselineColumnCount = currentColumnCount;
 
-                    for (let i = 0; i < headerRowsToKeep; i++) {
-                        let row = [...jsonData[i]];
-                        row.unshift('来源文件');
-                        mergedData.push(row);
+                const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                const wsRange = XLSX.utils.decode_range(worksheet['!ref']);
+                const headerRowsToKeep = Math.min(headerRows, jsonData.length);
+                const currentColumnCount = getMaxColumnCount(jsonData);
+
+                if (firstSheet) {
+                    // 第一个Sheet作为基准：复制其完整格式
+                    baselineJsonData = jsonData;
+                    baselineColumnCount = currentColumnCount;
+                    baselineRange = wsRange;
+                    baselineWorksheet = worksheet;
+
+                    // 复制所有单元格（含样式）
+                    for (let R = 0; R <= wsRange.e.r; R++) {
+                        for (let C = wsRange.s.c; C <= wsRange.e.c; C++) {
+                            const addr = XLSX.utils.encode_cell({ r: R, c: C });
+                            mergedWorksheet[addr] = deepCopyCell(worksheet[addr]);
+                        }
+                    }
+                    mergedRowCount = wsRange.e.r + 1;
+
+                    // 在第一列前插入"来源文件"列：所有列向右移动一位
+                    for (let R = 0; R < mergedRowCount; R++) {
+                        const newAddr = XLSX.utils.encode_cell({ r: R, c: baselineRange.e.c + 1 });
+                        const oldAddr = XLSX.utils.encode_cell({ r: R, c: baselineRange.e.c });
+                        mergedWorksheet[newAddr] = deepCopyCell(mergedWorksheet[oldAddr]);
+                        // 从最右列开始，逐列向右移动（倒序）
+                        for (let C = baselineRange.e.c; C >= 0; C--) {
+                            const dstAddr = XLSX.utils.encode_cell({ r: R, c: C + 1 });
+                            const srcAddr = XLSX.utils.encode_cell({ r: R, c: C });
+                            mergedWorksheet[dstAddr] = deepCopyCell(mergedWorksheet[srcAddr]);
+                        }
                     }
 
-                    for (let i = headerRowsToKeep; i < jsonData.length; i++) {
-                        let row = [...jsonData[i]];
-                        row.unshift(getSourceLabel(uploadedFile.name, sheetName));
-                        mergedData.push(row);
+                    // 设置"来源文件"列的表头和数据值
+                    for (let R = 0; R < mergedRowCount; R++) {
+                        const col0Addr = XLSX.utils.encode_cell({ r: R, c: 0 });
+                        if (R === 0) {
+                            mergedWorksheet[col0Addr] = {
+                                v: '来源文件', t: 's',
+                                s: { font: { bold: true }, fill: { fgColor: { rgb: 'FFE6F3FF' } } }
+                            };
+                        } else if (R < headerRows) {
+                            mergedWorksheet[col0Addr] = { v: '', t: 's', s: { fill: { fgColor: { rgb: 'FFE6F3FF' } } } };
+                        } else {
+                            mergedWorksheet[col0Addr] = {
+                                v: getSourceLabel(uploadedFile.name, sheetName), t: 's',
+                                s: { fill: { fgColor: { rgb: 'FFF0F0F0' } } }
+                            };
+                        }
                     }
 
                     firstSheet = false;
                 } else {
-                    if (currentHeaderSignature !== baselineHeaderSignature) {
-                        showToast(`工作表 ${sheetName} 的表头与基准表头不一致`, 'error');
-                        throw new Error(`工作表 ${sheetName} 的表头与基准表头不一致`);
+                    // 后续Sheet：验证表头一致性，然后追加数据行
+                    const headerValidation = validateHeaderConsistency(baselineJsonData, jsonData, headerRowsToKeep);
+                    if (!headerValidation.valid) {
+                        const errorMsg = `工作表 ${sheetName} 的表头与基准表头不一致：${headerValidation.reason}`;
+                        showToast(errorMsg, 'error');
+                        throw new Error(errorMsg);
                     }
-
                     if (currentColumnCount !== baselineColumnCount) {
                         showToast(`工作表 ${sheetName} 的列数与基准表不一致`, 'error');
                         throw new Error(`工作表 ${sheetName} 的列数与基准表不一致`);
                     }
 
+                    // 追加数据行（从源工作表复制单元格样式）
                     for (let i = headerRowsToKeep; i < jsonData.length; i++) {
-                        let row = [...jsonData[i]];
-                        row.unshift(getSourceLabel(uploadedFile.name, sheetName));
-                        mergedData.push(row);
+                        const newRow = mergedRowCount;
+
+                        // 设置"来源文件"列
+                        const col0Addr = XLSX.utils.encode_cell({ r: newRow, c: 0 });
+                        mergedWorksheet[col0Addr] = {
+                            v: getSourceLabel(uploadedFile.name, sheetName), t: 's',
+                            s: { fill: { fgColor: { rgb: 'FFF0F0F0' } } }
+                        };
+
+                        // 复制源单元格（含样式）到新行（偏移1列）
+                        for (let C = 0; C < baselineColumnCount; C++) {
+                            const srcAddr = XLSX.utils.encode_cell({ r: i, c: C });
+                            const dstAddr = XLSX.utils.encode_cell({ r: newRow, c: C + 1 });
+                            mergedWorksheet[dstAddr] = deepCopyCell(worksheet[srcAddr]);
+                        }
+
+                        mergedRowCount++;
                     }
                 }
-                
+
                 sheetCount++;
                 progressBarFill.style.width = `${10 + (sheetCount / totalSheets) * 80}%`;
                 loadingText.textContent = `正在处理工作表 ${sheetCount + 1}/${totalSheets}...`;
                 await new Promise(resolve => setTimeout(resolve, 10));
             }
-            
+
             loadingText.textContent = '正在生成Excel文件...';
-            
-            if (mergedData.length === 0) {
+
+            if (mergedRowCount === 0) {
                 showToast('没有数据可以合并', 'error');
                 throw new Error('没有数据可以合并');
             }
-            
-            const mergedWorksheet = XLSX.utils.aoa_to_sheet(mergedData);
-            
-            if (mergedData.length > 0) {
-                const range = XLSX.utils.decode_range(mergedWorksheet['!ref']);
 
-                const sourceColIndex = 0;
-                for (let R = 0; R <= range.e.r; R++) {
-                    const cellAddress = XLSX.utils.encode_cell({ r: R, c: sourceColIndex });
+            // 设置合并后的范围
+            mergedWorksheet['!ref'] = XLSX.utils.encode_range({
+                s: { r: 0, c: 0 },
+                e: { r: mergedRowCount - 1, c: baselineRange.e.c + 1 }
+            });
 
-                    if (R < headerRows) {
-                        mergedWorksheet[cellAddress] = {
-                            v: '来源文件',
-                            t: 's',
-                            s: {
-                                font: { bold: true },
-                                fill: { fgColor: { rgb: 'FFE6F3FF' } }
-                            }
-                        };
-                    } else {
-                        const row = mergedData[R];
-                        const sourceFileName = row[0];
-
-                        mergedWorksheet[cellAddress] = {
-                            v: sourceFileName,
-                            t: 's',
-                            s: {
-                                fill: { fgColor: { rgb: 'FFF0F0F0' } }
-                            }
-                        };
-                    }
-                }
-
-                mergedWorksheet['!ref'] = XLSX.utils.encode_range({
-                    s: { r: 0, c: 0 },
-                    e: { r: range.e.r, c: range.e.c }
-                });
+            // 从基准Sheet复制列宽（在头部插入"来源文件"列的默认宽度）
+            if (baselineWorksheet['!cols']) {
+                const sourceCols = JSON.parse(JSON.stringify(baselineWorksheet['!cols']));
+                const sourceColWidth = { wch: 18 }; // "来源文件"列默认宽度
+                sourceCols.unshift(sourceColWidth);
+                mergedWorksheet['!cols'] = sourceCols;
             }
-            
+
+            // 从基准Sheet复制行高
+            if (baselineWorksheet['!rows']) {
+                mergedWorksheet['!rows'] = JSON.parse(JSON.stringify(baselineWorksheet['!rows']));
+            }
+
             XLSX.utils.book_append_sheet(mergedWorkbook, mergedWorksheet, 'MergedData');
-            
-            // 使用统一的写入选项
+
             const excelBuffer = XLSX.write(mergedWorkbook, XLSX_WRITE_OPTIONS);
-            
             mergedFileBlob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
             mergedFileName = getMergeOutputFileName();
         }
@@ -2709,12 +3197,25 @@
         }
 
         function getUniqueSheetName(existingNames, proposedName) {
+            // 确保初始名称不超过31字符（Excel限制）
             let uniqueName = proposedName.substring(0, 31);
             let counter = 1;
+            const MAX_ATTEMPTS = 999; // 最大尝试次数
             
-            while (existingNames.includes(uniqueName)) {
-                uniqueName = proposedName.substring(0, 28) + `(${counter})`;
+            while (existingNames.includes(uniqueName) && counter < MAX_ATTEMPTS) {
+                // 动态计算前缀长度，确保总长度不超过31字符
+                // 格式: prefix + "(counter)"
+                const suffix = `(${counter})`;
+                const maxPrefixLength = 31 - suffix.length;
+                uniqueName = proposedName.substring(0, maxPrefixLength) + suffix;
                 counter++;
+            }
+            
+            // 如果超过最大尝试次数，使用时间戳确保唯一性
+            if (counter >= MAX_ATTEMPTS) {
+                const timestamp = Date.now().toString(36);
+                const maxPrefixLength = 31 - timestamp.length - 2;
+                uniqueName = proposedName.substring(0, maxPrefixLength) + '_' + timestamp;
             }
             
             return uniqueName;
@@ -2735,7 +3236,7 @@
             let uniqueName = sanitized;
             let counter = 1;
             const MAX_ATTEMPTS = 9999;
-            const MAX_NAME_LENGTH = 200;
+            // 注意：MAX_NAME_LENGTH 已在函数开头声明，这里直接使用
             while (existingNames.includes(uniqueName) && counter < MAX_ATTEMPTS) {
                 const suffix = buildSequenceSuffix(counter);
                 uniqueName = sanitized.substring(0, MAX_NAME_LENGTH - suffix.length) + suffix;
@@ -2848,6 +3349,143 @@
             goToStep(1);
             showToast('已重置', 'info');
         }
+
+        // ==================== 内嵌自测系统 ====================
+        // 通过 URL ?selftest=1 触发，或在控制台调用 runSelfTest()
+        const SELF_TEST_VERSION = '1.0';
+
+        async function runSelfTest() {
+            const results = [];
+            const pass = (name) => results.push({ name, ok: true });
+            const fail = (name, reason) => results.push({ name, ok: false, reason });
+
+            // T01: 依赖库加载
+            try {
+                if (typeof XLSX !== 'undefined' && typeof XLSX.read === 'function') pass('T01 xlsx 库已加载');
+                else fail('T01 xlsx 库已加载', 'XLSX 未定义');
+            } catch (e) { fail('T01 xlsx 库已加载', e.message); }
+
+            try {
+                if (typeof JSZip !== 'undefined') pass('T02 JSZip 库已加载');
+                else fail('T02 JSZip 库已加载', 'JSZip 未定义');
+            } catch (e) { fail('T02 JSZip 库已加载', e.message); }
+
+            // T03: 核心函数存在性
+            const coreFns = [
+                'switchMode', 'handleSplitFile', 'handleMergeFiles',
+                'generateSplitFiles', 'performMerge', 'goToStep',
+                'showToast', 'formatFileSize', 'validateExcelFileByMagicBytes',
+                'deepCopyCell', 'copyWorksheetProperties', 'adjustRangeReference',
+                'showLoading', 'hideLoading', 'updateProgress', 'updateStepUI'
+            ];
+            coreFns.forEach(fn => {
+                if (typeof window[fn] === 'function') pass('T03 函数存在: ' + fn);
+                else fail('T03 函数存在: ' + fn, '函数未定义');
+            });
+
+            // T04: 5种模式 DOM 按钮存在
+            const modes = ['split-sheet', 'split-column', 'split-column-vertical', 'merge-file', 'merge-sheet'];
+            modes.forEach(m => {
+                const btn = document.querySelector(`[data-mode="${m}"]`);
+                if (btn) pass('T04 模式按钮: ' + m);
+                else fail('T04 模式按钮: ' + m, '按钮未找到');
+            });
+
+            // T05: 关键 DOM 元素存在
+            const domIds = ['uploadArea', 'fileInput', 'sheetList', 'loading', 'progressBarFill',
+                            'step1', 'step2', 'step3', 'step4', 'splitStep2Card', 'mergeStep2Card',
+                            'splitSheetOptions', 'splitColumnOptions', 'splitColumnVerticalOptions',
+                            'mergeFileOptions', 'mergeSheetOptions'];
+            domIds.forEach(id => {
+                if (document.getElementById(id)) pass('T05 DOM: ' + id);
+                else fail('T05 DOM: ' + id, '元素未找到');
+            });
+
+            // T06: 模式切换逻辑
+            try {
+                switchMode('merge-file');
+                if (currentMode === 'merge-file') pass('T06 switchMode(merge-file)');
+                else fail('T06 switchMode(merge-file)', 'currentMode 未更新');
+                switchMode('split-sheet'); // 恢复默认
+            } catch (e) { fail('T06 switchMode', e.message); }
+
+            // T07: formatFileSize 输出格式
+            try {
+                const s = formatFileSize(1536);
+                if (s.includes('1.5') || s.includes('KB')) pass('T07 formatFileSize(1536)');
+                else fail('T07 formatFileSize(1536)', '返回值: ' + s);
+            } catch (e) { fail('T07 formatFileSize', e.message); }
+
+            // T08: 构造最小 XLSX 文件验证魔术字节检测
+            try {
+                // XLSX 魔术字节: PK 50 4B 03 04
+                const minXlsx = new Uint8Array([0x50, 0x4B, 0x03, 0x04, 0x14, 0x00]);
+                const blob = new Blob([minXlsx], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                const file = new File([blob], 'test.xlsx', { type: blob.type });
+                const valid = await validateExcelFileByMagicBytes(file);
+                if (valid) pass('T08 魔术字节验证(xlsx)');
+                else fail('T08 魔术字节验证(xlsx)', '有效 XLSX 魔术字节被拒绝');
+            } catch (e) { fail('T08 魔术字节验证', e.message); }
+
+            // T09: JSZip 生成测试
+            try {
+                const zip = new JSZip();
+                zip.file('test.txt', 'hello');
+                const blob = await zip.generateAsync({ type: 'blob' });
+                if (blob && blob.size > 0) pass('T09 JSZip 生成');
+                else fail('T09 JSZip 生成', 'blob 为空');
+            } catch (e) { fail('T09 JSZip 生成', e.message); }
+
+            // T10: XLSX 读取最小工作簿
+            try {
+                const wb = XLSX.utils.book_new();
+                const ws = XLSX.utils.aoa_to_sheet([['名称', '数量'], ['苹果', 10]]);
+                XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+                const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+                const wb2 = XLSX.read(new Uint8Array(wbout), { type: 'array' });
+                if (wb2.SheetNames[0] === 'Sheet1') pass('T10 XLSX 读写往返');
+                else fail('T10 XLSX 读写往返', 'Sheet 名称不匹配');
+            } catch (e) { fail('T10 XLSX 读写往返', e.message); }
+
+            // 汇总输出
+            const total = results.length;
+            const passed = results.filter(r => r.ok).length;
+            const failed = total - passed;
+
+            const report = [
+                `\n====== Excel工具 自测报告 v${SELF_TEST_VERSION} ======`,
+                `通过: ${passed}/${total}  失败: ${failed}`,
+                '--------------------------------------'
+            ];
+            results.forEach(r => {
+                report.push((r.ok ? '✅' : '❌') + ' ' + r.name + (r.ok ? '' : '\n   原因: ' + r.reason));
+            });
+            report.push('======================================\n');
+            const output = report.join('\n');
+            console.info(output);
+
+            // 渲染到页面（附加在 body 末尾，不影响主界面）
+            let panel = document.getElementById('selfTestPanel');
+            if (!panel) {
+                panel = document.createElement('div');
+                panel.id = 'selfTestPanel';
+                panel.style.cssText = 'position:fixed;bottom:0;left:0;right:0;max-height:320px;overflow-y:auto;background:#1e1e1e;color:#d4d4d4;font:13px/1.6 monospace;padding:16px 20px;z-index:99999;border-top:3px solid ' + (failed ? '#f48771' : '#4ec9b0') + ';';
+                document.body.appendChild(panel);
+            }
+            panel.innerHTML = results.map(r =>
+                `<span style="color:${r.ok ? '#4ec9b0' : '#f48771'}">${r.ok ? '✅' : '❌'} ${r.name}</span>${r.ok ? '' : '<br><span style="color:#ce9178;padding-left:20px">↳ ' + r.reason + '</span>'}`
+            ).join('<br>') +
+            `<br><br><strong style="color:${failed ? '#f48771' : '#4ec9b0'}">通过 ${passed}/${total}  ${failed ? '⚠ ' + failed + ' 项失败' : '全部通过 🎉'}</strong>` +
+            `<span style="float:right;cursor:pointer;color:#888" onclick="document.getElementById('selfTestPanel').remove()">✕ 关闭</span>`;
+
+            return { total, passed, failed, results };
+        }
+
+        // URL 参数自动触发：?selftest=1
+        if (new URLSearchParams(window.location.search).get('selftest') === '1') {
+            window.addEventListener('load', () => setTimeout(runSelfTest, 800));
+        }
+        // =====================================================
 
         function showToast(message, type = 'info') {
             // 清除之前的定时器，避免多个Toast重叠
