@@ -1166,6 +1166,170 @@
         }
 
         // ═══════════════════════════════════════════════════════════════
+        // SECTION: 性能优化 - Worker Pool 和缓存
+        // ═══════════════════════════════════════════════════════════════
+
+        /**
+         * Web Worker Pool 管理器
+         * 管理多个 Worker 实例，处理大文件避免阻塞 UI
+         */
+        class WorkerPool {
+            constructor(scriptUrl, poolSize = 2) {
+                this.scriptUrl = scriptUrl;
+                this.poolSize = poolSize;
+                this.workers = [];
+                this.queue = [];
+                this.taskId = 0;
+                this.pendingTasks = new Map();
+                this.enabled = false;
+                this.initialize();
+            }
+
+            initialize() {
+                try {
+                    if (typeof Worker === 'undefined') {
+                        console.warn('[WorkerPool] Web Workers not supported');
+                        return;
+                    }
+                    for (let i = 0; i < this.poolSize; i++) {
+                        this.createWorker();
+                    }
+                    this.enabled = this.workers.length > 0;
+                    if (this.enabled) {
+                        console.log(`[WorkerPool] Initialized with ${this.workers.length} workers`);
+                    }
+                } catch (e) {
+                    console.warn('[WorkerPool] Initialization failed:', e.message);
+                }
+            }
+
+            createWorker() {
+                try {
+                    const worker = new Worker(this.scriptUrl);
+                    worker.busy = false;
+                    worker.id = this.workers.length;
+                    worker.onmessage = (e) => this.handleMessage(e, worker);
+                    worker.onerror = (e) => this.handleError(e, worker);
+                    this.workers.push(worker);
+                    return worker;
+                } catch (e) {
+                    console.warn('[WorkerPool] Failed to create worker:', e.message);
+                    return null;
+                }
+            }
+
+            handleMessage(e, worker) {
+                const { type, result, error, percent, text } = e.data;
+                for (const [taskId, task] of this.pendingTasks) {
+                    if (task.worker === worker) {
+                        if (type === 'progress' && task.onProgress) {
+                            task.onProgress(percent, text);
+                        } else if (type === 'complete') {
+                            worker.busy = false;
+                            this.pendingTasks.delete(taskId);
+                            task.resolve({ result });
+                            this.processQueue();
+                        } else if (type === 'error') {
+                            worker.busy = false;
+                            this.pendingTasks.delete(taskId);
+                            task.reject(new Error(error));
+                            this.processQueue();
+                        }
+                        break;
+                    }
+                }
+            }
+
+            handleError(e, worker) {
+                console.error('[WorkerPool] Worker error:', e);
+                worker.busy = false;
+            }
+
+            execute(action, data, onProgress) {
+                return new Promise((resolve, reject) => {
+                    const taskId = ++this.taskId;
+                    this.pendingTasks.set(taskId, { resolve, reject, onProgress, worker: null });
+                    this.queue.push({ taskId, action, data });
+                    this.processQueue();
+                });
+            }
+
+            processQueue() {
+                while (this.queue.length > 0) {
+                    const availableWorker = this.workers.find(w => !w.busy);
+                    if (!availableWorker) break;
+                    const { taskId, action, data } = this.queue.shift();
+                    const task = this.pendingTasks.get(taskId);
+                    if (task) {
+                        task.worker = availableWorker;
+                        availableWorker.busy = true;
+                        availableWorker.postMessage({ id: taskId, action, data });
+                    }
+                }
+            }
+
+            isEnabled() { return this.enabled; }
+        }
+
+        /**
+         * Workbook 缓存管理器
+         */
+        class WorkbookCache {
+            constructor(maxSize = 3) {
+                this.cache = new Map();
+                this.maxSize = maxSize;
+                this.stats = { hits: 0, misses: 0 };
+            }
+            get(fileId) {
+                const entry = this.cache.get(fileId);
+                if (entry) {
+                    entry.lastAccessed = Date.now();
+                    this.stats.hits++;
+                    return entry.data;
+                }
+                this.stats.misses++;
+                return null;
+            }
+            set(fileId, data) {
+                if (this.cache.size >= this.maxSize) this.evictLRU();
+                this.cache.set(fileId, { data, lastAccessed: Date.now() });
+            }
+            evictLRU() {
+                let oldest = null, oldestTime = Infinity;
+                for (const [key, entry] of this.cache) {
+                    if (entry.lastAccessed < oldestTime) {
+                        oldest = key;
+                        oldestTime = entry.lastAccessed;
+                    }
+                }
+                if (oldest) this.cache.delete(oldest);
+            }
+            getStats() {
+                const total = this.stats.hits + this.stats.misses;
+                return { ...this.stats, hitRate: total > 0 ? (this.stats.hits / total * 100).toFixed(1) + '%' : 'N/A' };
+            }
+        }
+
+        /**
+         * 优化的单元格拷贝函数
+         */
+        function fastCopyCell(cell) {
+            if (!cell || typeof cell !== 'object') return cell;
+            if (Array.isArray(cell)) return cell.slice();
+            return { ...cell };
+        }
+
+        // 全局实例
+        let excelWorkerPool = null;
+        const workbookCache = new WorkbookCache(3);
+
+        function initializeWorkerPool() {
+            setTimeout(() => {
+                excelWorkerPool = new WorkerPool('workers/excel-processor.worker.js', 2);
+            }, 100);
+        }
+
+        // ═══════════════════════════════════════════════════════════════
         // SECTION: Loading/Progress 管理函数
         // ═══════════════════════════════════════════════════════════════
 
@@ -1214,10 +1378,13 @@
 
         // 初始化函数（DOM加载后执行）
         function initializeApp() {
+            // 初始化 Worker Pool（性能优化）
+            initializeWorkerPool();
+
             // 获取DOM元素
             uploadArea = document.getElementById('uploadArea');
             fileInput = document.getElementById('fileInput');
-            
+
             // 验证元素是否存在
             if (!uploadArea || !fileInput) {
                 alert('页面初始化失败：关键元素未找到');
