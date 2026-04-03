@@ -1,0 +1,303 @@
+{
+  "summary": {
+    "pass": 40,
+    "fail": 1,
+    "total": 41,
+    "duration": "68.54"
+  },
+  "tests": [
+    {
+      "name": "模式按钮: 按工作表拆分",
+      "status": "PASS",
+      "details": {
+        "message": "点击后处于激活状态"
+      },
+      "time": "2026-04-03T15:55:30.067Z"
+    },
+    {
+      "name": "模式按钮: 按列拆分(横向)",
+      "status": "PASS",
+      "details": {
+        "message": "点击后处于激活状态"
+      },
+      "time": "2026-04-03T15:55:31.227Z"
+    },
+    {
+      "name": "模式按钮: 按列拆分(竖向)",
+      "status": "PASS",
+      "details": {
+        "message": "点击后处于激活状态"
+      },
+      "time": "2026-04-03T15:55:32.374Z"
+    },
+    {
+      "name": "模式按钮: 文件合并",
+      "status": "PASS",
+      "details": {
+        "message": "点击后处于激活状态"
+      },
+      "time": "2026-04-03T15:55:33.527Z"
+    },
+    {
+      "name": "模式按钮: 工作表数据合并",
+      "status": "PASS",
+      "details": {
+        "message": "点击后处于激活状态"
+      },
+      "time": "2026-04-03T15:55:34.683Z"
+    },
+    {
+      "name": "下一步按钮",
+      "status": "PASS",
+      "details": {
+        "message": "成功进入步骤3"
+      },
+      "time": "2026-04-03T15:55:40.566Z"
+    },
+    {
+      "name": "S2: 选择拆分模式",
+      "status": "PASS",
+      "details": {},
+      "time": "2026-04-03T15:55:43.023Z"
+    },
+    {
+      "name": "S2: 上传文件",
+      "status": "PASS",
+      "details": {
+        "message": "文件解析成功"
+      },
+      "time": "2026-04-03T15:55:45.723Z"
+    },
+    {
+      "name": "S2: 进入步骤2",
+      "status": "PASS",
+      "details": {
+        "message": "文件信息: true, 工作表列表: true"
+      },
+      "time": "2026-04-03T15:55:45.826Z"
+    },
+    {
+      "name": "S2: 工作表数量",
+      "status": "PASS",
+      "details": {
+        "message": "期望3个, 实际3个"
+      },
+      "time": "2026-04-03T15:55:45.827Z"
+    },
+    {
+      "name": "S2: 选择工作表",
+      "status": "PASS",
+      "details": {
+        "message": "选中 3 个工作表"
+      },
+      "time": "2026-04-03T15:55:47.952Z"
+    },
+    {
+      "name": "S2: 进入步骤3",
+      "status": "PASS",
+      "details": {},
+      "time": "2026-04-03T15:55:49.696Z"
+    },
+    {
+      "name": "S2: 文件生成",
+      "status": "PASS",
+      "details": {
+        "message": "处理完成"
+      },
+      "time": "2026-04-03T15:55:52.450Z"
+    },
+    {
+      "name": "S2: 生成文件数",
+      "status": "PASS",
+      "details": {
+        "message": "期望3个, 显示3个, 列表中有3个"
+      },
+      "time": "2026-04-03T15:55:52.579Z"
+    },
+    {
+      "name": "S2: 下载按钮",
+      "status": "PASS",
+      "details": {},
+      "time": "2026-04-03T15:55:52.579Z"
+    },
+    {
+      "name": "S2: 文件名正确",
+      "status": "PASS",
+      "details": {
+        "message": "📄 multi-sheet_销售数据.xlsx, 📄 multi-sheet_库存数据.xlsx, 📄 multi-sheet_客户数据.xlsx"
+      },
+      "time": "2026-04-03T15:55:52.582Z"
+    },
+    {
+      "name": "S3: 选择横向拆分模式",
+      "status": "PASS",
+      "details": {},
+      "time": "2026-04-03T15:55:54.951Z"
+    },
+    {
+      "name": "S3: 上传文件",
+      "status": "PASS",
+      "details": {},
+      "time": "2026-04-03T15:55:57.651Z"
+    },
+    {
+      "name": "S3: 选择工作表",
+      "status": "PASS",
+      "details": {},
+      "time": "2026-04-03T15:55:58.869Z"
+    },
+    {
+      "name": "S3: 进入列选择",
+      "status": "PASS",
+      "details": {},
+      "time": "2026-04-03T15:56:00.532Z"
+    },
+    {
+      "name": "S3: 列数量",
+      "status": "PASS",
+      "details": {
+        "message": "期望4列, 实际4列"
+      },
+      "time": "2026-04-03T15:56:00.623Z"
+    },
+    {
+      "name": "S3: 选择拆分列",
+      "status": "PASS",
+      "details": {},
+      "time": "2026-04-03T15:56:01.767Z"
+    },
+    {
+      "name": "S3: 文件生成",
+      "status": "PASS",
+      "details": {},
+      "time": "2026-04-03T15:56:04.515Z"
+    },
+    {
+      "name": "S3: 分组文件数",
+      "status": "PASS",
+      "details": {
+        "message": "期望3个部门文件, 实际3个"
+      },
+      "time": "2026-04-03T15:56:04.619Z"
+    },
+    {
+      "name": "S4: 选择竖向拆分模式",
+      "status": "PASS",
+      "details": {},
+      "time": "2026-04-03T15:56:06.960Z"
+    },
+    {
+      "name": "S4: 上传文件",
+      "status": "PASS",
+      "details": {},
+      "time": "2026-04-03T15:56:09.659Z"
+    },
+    {
+      "name": "S4: 选择工作表",
+      "status": "PASS",
+      "details": {},
+      "time": "2026-04-03T15:56:10.873Z"
+    },
+    {
+      "name": "S4: 进入配置界面",
+      "status": "PASS",
+      "details": {},
+      "time": "2026-04-03T15:56:12.524Z"
+    },
+    {
+      "name": "S4: 固定列数量",
+      "status": "PASS",
+      "details": {
+        "message": "期望5列, 实际5列"
+      },
+      "time": "2026-04-03T15:56:12.621Z"
+    },
+    {
+      "name": "S4: 数据列数量",
+      "status": "PASS",
+      "details": {
+        "message": "期望5列, 实际5列"
+      },
+      "time": "2026-04-03T15:56:12.622Z"
+    },
+    {
+      "name": "S4: 选择固定列",
+      "status": "PASS",
+      "details": {
+        "message": "选中2个固定列"
+      },
+      "time": "2026-04-03T15:56:13.895Z"
+    },
+    {
+      "name": "S4: 选择数据列",
+      "status": "PASS",
+      "details": {
+        "message": "选中2个数据列(可用3个)"
+      },
+      "time": "2026-04-03T15:56:15.165Z"
+    },
+    {
+      "name": "S4: 文件生成",
+      "status": "PASS",
+      "details": {},
+      "time": "2026-04-03T15:56:16.908Z"
+    },
+    {
+      "name": "S4: 生成文件数",
+      "status": "PASS",
+      "details": {
+        "message": "期望2个文件, 实际2个"
+      },
+      "time": "2026-04-03T15:56:17.010Z"
+    },
+    {
+      "name": "S5: 选择文件合并模式",
+      "status": "PASS",
+      "details": {},
+      "time": "2026-04-03T15:56:19.370Z"
+    },
+    {
+      "name": "S5: 上传多个文件",
+      "status": "PASS",
+      "details": {},
+      "time": "2026-04-03T15:56:22.072Z"
+    },
+    {
+      "name": "S5: 文件列表显示",
+      "status": "PASS",
+      "details": {
+        "message": "期望2个文件, 实际2个"
+      },
+      "time": "2026-04-03T15:56:22.145Z"
+    },
+    {
+      "name": "S6: 选择工作表数据合并模式",
+      "status": "PASS",
+      "details": {},
+      "time": "2026-04-03T15:56:24.439Z"
+    },
+    {
+      "name": "S6: 上传文件",
+      "status": "PASS",
+      "details": {},
+      "time": "2026-04-03T15:56:27.138Z"
+    },
+    {
+      "name": "S7: 重置功能",
+      "status": "FAIL",
+      "details": {
+        "message": "未找到重置按钮"
+      },
+      "time": "2026-04-03T15:56:31.223Z"
+    },
+    {
+      "name": "S8: 无效文件提示",
+      "status": "PASS",
+      "details": {
+        "message": "提示: 请上传Excel文件（.xlsx或.xls格式）..."
+      },
+      "time": "2026-04-03T15:56:35.082Z"
+    }
+  ],
+  "screenshots": 27
+}

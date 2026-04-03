@@ -1,0 +1,359 @@
+[
+  {
+    "time": "2026-04-03T16:08:37.597Z",
+    "step": 0,
+    "action": "浏览器启动",
+    "result": "PASS",
+    "details": "Chromium 启动成功"
+  },
+  {
+    "time": "2026-04-03T16:08:37.598Z",
+    "step": 1,
+    "action": "打开浏览器访问页面",
+    "result": "START",
+    "details": ""
+  },
+  {
+    "time": "2026-04-03T16:08:39.675Z",
+    "step": 1,
+    "action": "打开浏览器访问页面",
+    "result": "PASS",
+    "details": "标题: Excel文件处理工具"
+  },
+  {
+    "time": "2026-04-03T16:08:39.756Z",
+    "step": 2,
+    "action": "查看页面寻找按钮",
+    "result": "START",
+    "details": ""
+  },
+  {
+    "time": "2026-04-03T16:08:39.763Z",
+    "step": 2,
+    "action": "查看页面寻找按钮",
+    "result": "PASS",
+    "details": "找到\"按工作表拆分\"按钮"
+  },
+  {
+    "time": "2026-04-03T16:08:39.763Z",
+    "step": 3,
+    "action": "点击\"按工作表拆分\"按钮",
+    "result": "START",
+    "details": ""
+  },
+  {
+    "time": "2026-04-03T16:08:41.617Z",
+    "step": 3,
+    "action": "点击\"按工作表拆分\"按钮",
+    "result": "PASS",
+    "details": "按钮处于激活状态"
+  },
+  {
+    "time": "2026-04-03T16:08:41.699Z",
+    "step": 4,
+    "action": "观察上传区域",
+    "result": "START",
+    "details": ""
+  },
+  {
+    "time": "2026-04-03T16:08:41.701Z",
+    "step": 4,
+    "action": "观察上传区域",
+    "result": "PASS",
+    "details": "上传区域可见"
+  },
+  {
+    "time": "2026-04-03T16:08:41.701Z",
+    "step": 5,
+    "action": "准备测试文件",
+    "result": "START",
+    "details": ""
+  },
+  {
+    "time": "2026-04-03T16:08:41.714Z",
+    "step": 5,
+    "action": "准备测试文件",
+    "result": "PASS",
+    "details": "/private/tmp/excel-offline-tool/tests/human-test-downloads/source-multi.xlsx"
+  },
+  {
+    "time": "2026-04-03T16:08:41.714Z",
+    "step": 6,
+    "action": "点击上传区域选择文件",
+    "result": "START",
+    "details": ""
+  },
+  {
+    "time": "2026-04-03T16:08:44.727Z",
+    "step": 7,
+    "action": "等待文件解析",
+    "result": "START",
+    "details": ""
+  },
+  {
+    "time": "2026-04-03T16:08:44.734Z",
+    "step": 7,
+    "action": "等待文件解析",
+    "result": "PASS",
+    "details": "提示: 文件解析成功！..."
+  },
+  {
+    "time": "2026-04-03T16:08:44.826Z",
+    "step": 8,
+    "action": "查看文件信息",
+    "result": "START",
+    "details": ""
+  },
+  {
+    "time": "2026-04-03T16:08:44.829Z",
+    "step": 8,
+    "action": "查看文件信息",
+    "result": "PASS",
+    "details": "文件名: source-multi.xlsx"
+  },
+  {
+    "time": "2026-04-03T16:08:44.829Z",
+    "step": 9,
+    "action": "查看工作表列表",
+    "result": "START",
+    "details": ""
+  },
+  {
+    "time": "2026-04-03T16:08:44.831Z",
+    "step": 9,
+    "action": "查看工作表列表",
+    "result": "PASS",
+    "details": "发现 2 个工作表"
+  },
+  {
+    "time": "2026-04-03T16:08:44.896Z",
+    "step": 10,
+    "action": "检查默认选中状态",
+    "result": "START",
+    "details": ""
+  },
+  {
+    "time": "2026-04-03T16:08:44.897Z",
+    "step": 10,
+    "action": "检查默认选中状态",
+    "result": "PASS",
+    "details": "2 个工作表已选中"
+  },
+  {
+    "time": "2026-04-03T16:08:44.897Z",
+    "step": 11,
+    "action": "点击\"下一步\"按钮",
+    "result": "START",
+    "details": ""
+  },
+  {
+    "time": "2026-04-03T16:08:46.934Z",
+    "step": 11,
+    "action": "点击\"下一步\"按钮",
+    "result": "PASS",
+    "details": "进入步骤3"
+  },
+  {
+    "time": "2026-04-03T16:08:47.057Z",
+    "step": 12,
+    "action": "阅读配置说明",
+    "result": "START",
+    "details": ""
+  },
+  {
+    "time": "2026-04-03T16:08:47.058Z",
+    "step": 12,
+    "action": "阅读配置说明",
+    "result": "PASS",
+    "details": "已选择的工作表将被拆分为独立的 Excel 文件，并尽量保留常用格式"
+  },
+  {
+    "time": "2026-04-03T16:08:47.058Z",
+    "step": 13,
+    "action": "点击生成文件",
+    "result": "START",
+    "details": ""
+  },
+  {
+    "time": "2026-04-03T16:08:49.179Z",
+    "step": 14,
+    "action": "等待处理完成",
+    "result": "START",
+    "details": ""
+  },
+  {
+    "time": "2026-04-03T16:08:49.183Z",
+    "step": 14,
+    "action": "等待处理完成",
+    "result": "PASS",
+    "details": "处理完成"
+  },
+  {
+    "time": "2026-04-03T16:08:49.248Z",
+    "step": 15,
+    "action": "查看生成结果",
+    "result": "START",
+    "details": ""
+  },
+  {
+    "time": "2026-04-03T16:08:49.265Z",
+    "step": 15,
+    "action": "查看生成结果",
+    "result": "PASS",
+    "details": "文件数: 2, 总大小: NaN undefined"
+  },
+  {
+    "time": "2026-04-03T16:08:49.265Z",
+    "step": 16,
+    "action": "查看文件列表",
+    "result": "START",
+    "details": ""
+  },
+  {
+    "time": "2026-04-03T16:08:49.267Z",
+    "step": 16,
+    "action": "查看文件列表",
+    "result": "PASS",
+    "details": "2 个文件"
+  },
+  {
+    "time": "2026-04-03T16:08:49.268Z",
+    "step": 17,
+    "action": "验证文件名",
+    "result": "START",
+    "details": ""
+  },
+  {
+    "time": "2026-04-03T16:08:49.269Z",
+    "step": 17,
+    "action": "验证文件名",
+    "result": "PASS",
+    "details": "📄 source-multi_销售数据.xlsx, 📄 source-multi_库存数据.xlsx"
+  },
+  {
+    "time": "2026-04-03T16:08:49.269Z",
+    "step": 18,
+    "action": "点击下载按钮",
+    "result": "START",
+    "details": ""
+  },
+  {
+    "time": "2026-04-03T16:08:49.270Z",
+    "step": 18,
+    "action": "点击下载按钮",
+    "result": "PASS",
+    "details": "下载按钮可见"
+  },
+  {
+    "time": "2026-04-03T16:08:49.270Z",
+    "step": 19,
+    "action": "下载并验证文件",
+    "result": "START",
+    "details": ""
+  },
+  {
+    "time": "2026-04-03T16:08:50.320Z",
+    "step": 19,
+    "action": "下载并验证文件",
+    "result": "PASS",
+    "details": "/private/tmp/excel-offline-tool/tests/human-test-downloads/source-multi_20260404_000847.zip"
+  },
+  {
+    "time": "2026-04-03T16:08:50.320Z",
+    "step": 20,
+    "action": "解压验证内容",
+    "result": "START",
+    "details": ""
+  },
+  {
+    "time": "2026-04-03T16:08:50.328Z",
+    "step": 20,
+    "action": "解压验证内容",
+    "result": "PASS",
+    "details": "包含 2 个文件"
+  },
+  {
+    "time": "2026-04-03T16:08:50.362Z",
+    "step": 21,
+    "action": "验证 source-multi_销售数据.xlsx",
+    "result": "PASS",
+    "details": "3 行数据"
+  },
+  {
+    "time": "2026-04-03T16:08:50.362Z",
+    "step": 22,
+    "action": "验证 source-multi_销售数据.xlsx 格式",
+    "result": "FAIL",
+    "details": "列宽丢失"
+  },
+  {
+    "time": "2026-04-03T16:08:50.405Z",
+    "step": 21,
+    "action": "验证 source-multi_库存数据.xlsx",
+    "result": "PASS",
+    "details": "3 行数据"
+  },
+  {
+    "time": "2026-04-03T16:08:50.405Z",
+    "step": 22,
+    "action": "验证 source-multi_库存数据.xlsx 格式",
+    "result": "FAIL",
+    "details": "列宽丢失"
+  },
+  {
+    "time": "2026-04-03T16:08:50.405Z",
+    "step": 23,
+    "action": "场景2开始",
+    "result": "START",
+    "details": "按列拆分测试"
+  },
+  {
+    "time": "2026-04-03T16:08:54.356Z",
+    "step": 24,
+    "action": "选择横向拆分模式",
+    "result": "PASS",
+    "details": ""
+  },
+  {
+    "time": "2026-04-03T16:08:57.431Z",
+    "step": 25,
+    "action": "上传文件",
+    "result": "PASS",
+    "details": ""
+  },
+  {
+    "time": "2026-04-03T16:08:59.058Z",
+    "step": 26,
+    "action": "选择工作表",
+    "result": "PASS",
+    "details": ""
+  },
+  {
+    "time": "2026-04-03T16:09:01.106Z",
+    "step": 27,
+    "action": "进入列选择",
+    "result": "PASS",
+    "details": ""
+  },
+  {
+    "time": "2026-04-03T16:09:02.745Z",
+    "step": 28,
+    "action": "选择拆分列",
+    "result": "PASS",
+    "details": ""
+  },
+  {
+    "time": "2026-04-03T16:09:04.801Z",
+    "step": 29,
+    "action": "生成完成",
+    "result": "PASS",
+    "details": ""
+  },
+  {
+    "time": "2026-04-03T16:09:04.887Z",
+    "step": 30,
+    "action": "分组结果",
+    "result": "PASS",
+    "details": "2 个分组文件"
+  }
+]
