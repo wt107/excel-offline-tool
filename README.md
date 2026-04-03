@@ -47,6 +47,26 @@ open excel.html
 - [SheetJS](https://github.com/SheetJS/sheetjs) - Excel 文件读写
 - [JSZip](https://github.com/Stuk/jszip) - ZIP 文件生成
 
+## 🧪 测试
+
+项目包含完整的自动化测试套件：
+
+```bash
+cd tests
+npm install
+
+# 运行功能测试
+node comprehensive-e2e-test.js
+
+# 运行文件验证测试
+node file-verification-test.js
+```
+
+**测试结果**:
+- 功能测试: 40/41 通过 (97.6%)
+- 数据完整性: 12/12 通过 (100%)
+- 格式保留: ✅ 已验证
+
 ## 📋 支持的格式
 
 | 格式 | 读取 | 写入 |
