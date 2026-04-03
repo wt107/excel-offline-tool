@@ -681,38 +681,58 @@ class ComprehensiveTest {
     await this.page.goto(CONFIG.baseUrl);
     await this.page.waitForTimeout(500);
 
-    // 执行一些操作
-    await this.page.click('[data-mode="merge-file"]');
-    const testFile = TestFiles.merge1();
+    // 执行一些操作：选择模式 -> 上传文件 -> 进入步骤4
+    await this.page.click('[data-mode="split-sheet"]');
+    await this.page.waitForTimeout(500);
+    
+    // 上传文件
+    const testFile = TestFiles.multiSheet();
     await this.page.locator('#fileInput').setInputFiles(testFile);
     await this.page.waitForTimeout(1500);
+    
+    // 选择工作表
+    const checkboxes = await this.page.locator('.sheet-checkbox').all();
+    for (const cb of checkboxes.slice(0, 2)) {
+      await cb.check();
+    }
+    
+    // 进入步骤3
+    await this.page.click('#step2Next');
+    await this.page.waitForTimeout(500);
+    
+    // 点击生成
+    await this.page.click('#step3Next');
+    await this.page.waitForTimeout(1000);
+    
+    // 等待处理完成
+    await this.page.waitForSelector('#resultSummary', { state: 'visible', timeout: 30000 });
+    await this.page.waitForTimeout(500);
+    
     await this.screenshot('s7_before_reset');
 
-    // 点击重置
-    const resetBtns = await this.page.locator('button:has-text("重新开始")').all();
+    // 点击重置按钮（现在应该在步骤4可见）
+    const resetBtn = await this.page.locator('#step4 button:has-text("重新开始")');
     let resetClicked = false;
-    for (const btn of resetBtns) {
-      if (await btn.isVisible()) {
-        await btn.click();
-        resetClicked = true;
-        await this.page.waitForTimeout(1000);
-        break;
-      }
+    
+    if (await resetBtn.isVisible().catch(() => false)) {
+      await resetBtn.click();
+      resetClicked = true;
+      await this.page.waitForTimeout(1000);
     }
 
     if (resetClicked) {
       await this.screenshot('s7_after_reset');
       
       // 验证回到步骤1
-      const step1Active = await this.page.locator('[data-step="1"]').evaluate(
-        el => el.classList.contains('active')
+      const step1Active = await this.page.locator('#step1').evaluate(
+        el => el.style.display !== 'none'
       ).catch(() => false);
       
-      // 验证文件输入已清空
+      // 验证文件输入已清空（fileInfo 隐藏）
       const fileInfoHidden = await this.page.locator('#fileInfo').isHidden().catch(() => true);
       
       report.add('S7: 重置功能', (step1Active && fileInfoHidden) ? 'PASS' : 'FAIL', 
-        { message: `步骤1激活: ${step1Active}, 文件信息隐藏: ${fileInfoHidden}` });
+        { message: `步骤1显示: ${step1Active}, 文件信息隐藏: ${fileInfoHidden}` });
     } else {
       report.add('S7: 重置功能', 'FAIL', { message: '未找到重置按钮' });
     }
