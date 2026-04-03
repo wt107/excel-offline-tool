@@ -2717,7 +2717,7 @@
                 progressBarFill.style.width = '40%';
                 await new Promise(resolve => setTimeout(resolve, 100));
 
-                const generationResult = phase3WorkbookGeneration(analysisResult, classificationResult);
+                const generationResult = await phase3WorkbookGeneration(analysisResult, classificationResult);
                 
                 loadingText.textContent = '第四阶段：输出管理...';
                 progressBarFill.style.width = '80%';
@@ -2731,8 +2731,12 @@
 
                 loading.style.display = 'none';
                 
-                document.getElementById('totalFiles').textContent = generationResult.fileCount;
-                document.getElementById('totalSize').textContent = formatFileSize(generationResult.totalSize);
+                // 防御性处理：确保 generationResult 有有效值
+                const resultFileCount = generationResult && generationResult.fileCount ? generationResult.fileCount : 0;
+                const resultTotalSize = generationResult && generationResult.totalSize ? generationResult.totalSize : 0;
+                
+                document.getElementById('totalFiles').textContent = resultFileCount;
+                document.getElementById('totalSize').textContent = formatFileSize(resultTotalSize);
                 document.getElementById('resultSummary').style.display = 'block';
                 
                 renderResultFileList(generatedFiles, 'resultFileList');
@@ -2740,7 +2744,7 @@
                 document.getElementById('downloadBtn').style.display = 'inline-flex';
                 
                 isProcessing = false;  // 重置处理标志
-                showToast(`成功生成 ${generationResult.fileCount} 个文件！`, 'success');
+                showToast(`成功生成 ${resultFileCount} 个文件！`, 'success');
                 
             } catch (error) {
                 console.error('按列拆分错误:', error);

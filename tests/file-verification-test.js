@@ -437,8 +437,8 @@ class FileVerificationTest {
         const tempPath = path.join(CONFIG.downloadDir, `format-test-${fileName}`);
         fs.writeFileSync(tempPath, fileData);
         
-        // 读取验证
-        const resultWb = XLSX.readFile(tempPath);
+        // 读取验证（设置 cellStyles: true 以保留格式）
+        const resultWb = XLSX.readFile(tempPath, { cellStyles: true });
         const resultWs = resultWb.Sheets[resultWb.SheetNames[0]];
         
         // 验证列宽是否保留

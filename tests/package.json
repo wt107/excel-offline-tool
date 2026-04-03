@@ -43,5 +43,8 @@
       "json"
     ],
     "coverageDirectory": "./reports/coverage"
+  },
+  "dependencies": {
+    "playwright": "^1.59.1"
   }
 }
