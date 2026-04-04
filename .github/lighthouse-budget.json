@@ -1,0 +1,115 @@
+{
+  "$schema": "https://raw.githubusercontent.com/GoogleChrome/lighthouse/master/lighthouse-core/config/budget-schema.json",
+  "path": "",
+  "ci": {
+    "budgets": [
+      {
+        "resourceCounts": [
+          {
+            "resourceType": "document",
+            "budget": 1
+          },
+          {
+            "resourceType": "script",
+            "budget": 5
+          },
+          {
+            "resourceType": "stylesheet",
+            "budget": 1
+          },
+          {
+            "resourceType": "image",
+            "budget": 10
+          },
+          {
+            "resourceType": "media",
+            "budget": 0
+          },
+          {
+            "resourceType": "font",
+            "budget": 2
+          },
+          {
+            "resourceType": "total",
+            "budget": 20
+          },
+          {
+            "resourceType": "third-party",
+            "budget": 2
+          }
+        ],
+        "resourceSizes": [
+          {
+            "resourceType": "document",
+            "budget": 200
+          },
+          {
+            "resourceType": "script",
+            "budget": 500
+          },
+          {
+            "resourceType": "stylesheet",
+            "budget": 50
+          },
+          {
+            "resourceType": "image",
+            "budget": 100
+          },
+          {
+            "resourceType": "media",
+            "budget": 0
+          },
+          {
+            "resourceType": "font",
+            "budget": 100
+          },
+          {
+            "resourceType": "total",
+            "budget": 2000
+          },
+          {
+            "resourceType": "third-party",
+            "budget": 500
+          }
+        ],
+        "timings": [
+          {
+            "metric": "first-contentful-paint",
+            "budget": 1800,
+            "tolerance": 200
+          },
+          {
+            "metric": "largest-contentful-paint",
+            "budget": 2500,
+            "tolerance": 300
+          },
+          {
+            "metric": "first-meaningful-paint",
+            "budget": 2000,
+            "tolerance": 200
+          },
+          {
+            "metric": "speed-index",
+            "budget": 3000,
+            "tolerance": 300
+          },
+          {
+            "metric": "interactive",
+            "budget": 3800,
+            "tolerance": 400
+          },
+          {
+            "metric": "total-blocking-time",
+            "budget": 200,
+            "tolerance": 50
+          },
+          {
+            "metric": "cumulative-layout-shift",
+            "budget": 0.1,
+            "tolerance": 0.05
+          }
+        ]
+      }
+    ]
+  }
+}
