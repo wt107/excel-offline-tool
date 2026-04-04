@@ -1,0 +1,106 @@
+{
+  "timestamp": "2026-04-04T01:04:58.998Z",
+  "results": [
+    {
+      "test": "模式按钮",
+      "element": "按工作表拆分",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "test": "模式按钮",
+      "element": "按列拆分(横向)",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "test": "模式按钮",
+      "element": "按列拆分(竖向)",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "test": "模式按钮",
+      "element": "文件合并",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "test": "模式按钮",
+      "element": "工作表数据合并",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "test": "步骤导航",
+      "element": "步骤1下一步",
+      "passed": true,
+      "detail": "进入步骤2"
+    },
+    {
+      "test": "步骤导航",
+      "element": "步骤2上一步",
+      "passed": true,
+      "detail": "返回步骤1"
+    },
+    {
+      "test": "步骤导航",
+      "element": "步骤2下一步",
+      "passed": true,
+      "detail": "进入步骤3"
+    },
+    {
+      "test": "步骤导航",
+      "element": "步骤3下一步(生成)",
+      "passed": true,
+      "detail": "进入步骤4"
+    },
+    {
+      "test": "步骤导航",
+      "element": "步骤4上一步",
+      "passed": true,
+      "detail": "返回步骤3"
+    },
+    {
+      "test": "选择按钮",
+      "element": "取消全选",
+      "passed": true,
+      "detail": "选中 0 个"
+    },
+    {
+      "test": "选择按钮",
+      "element": "全选",
+      "passed": true,
+      "detail": "选中 3 个"
+    },
+    {
+      "test": "重置按钮",
+      "element": "重新开始",
+      "passed": true,
+      "detail": "回到步骤1"
+    },
+    {
+      "test": "下载按钮",
+      "element": "单个文件下载",
+      "passed": true,
+      "detail": "3 个文件"
+    },
+    {
+      "test": "下载按钮",
+      "element": "下载全部",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "test": "输入变化",
+      "element": "表头行数修改",
+      "passed": true,
+      "detail": "4 列 -> 4 列"
+    }
+  ],
+  "summary": {
+    "passed": 16,
+    "failed": 0,
+    "total": 16
+  }
+}
