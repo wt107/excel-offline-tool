@@ -162,4 +162,57 @@ node click-operations-test.js
 
 ---
 
-*本文档合并了原散落的测试文档，便于统一查阅*
+## 📝 测试计划
+
+### 测试设计理念
+
+从用户实际使用角度出发，覆盖以下维度：
+1. **数据结构维度**: 单行表头、多行表头、合并单元格
+2. **操作场景维度**: 拆分、合并、不同模式切换
+3. **边界条件维度**: 空表头、大量表头行、表头行数变化
+4. **格式保留维度**: 合并单元格、列宽、行高
+
+### 测试场景矩阵
+
+| 场景 | 描述 | 测试文件 |
+|------|------|---------|
+| 合并单元格表头 | 财务报表、统计表，表头有跨列合并 | merged-header.xlsx |
+| 多行表头 (2-3行) | 复杂报表，有多级分类 | multi-header-2rows.xlsx |
+| 表头行数变化 | 用户上传文件后修改表头行数设置 | - |
+| 竖向拆分的合并单元格 | 竖向拆分保留固定列，但固定列包含合并单元格 | vertical-split-with-merge.xlsx |
+| 合并文件的多表头一致性 | 合并多个文件，表头结构相同 | merge-header-1/2.xlsx |
+
+### 点击操作清单
+
+| 类别 | 已测试 | 未测试 | 总计 |
+|-----|--------|--------|------|
+| 模式按钮 | 5 | 0 | 5 |
+| 步骤导航 | 4 | 4 | 8 |
+| 选择按钮 | 2 | 6 | 8 |
+| 列表项点击 | 4 | 4 | 8 |
+| 文件上传 | 1 | 1 | 2 |
+| 其他 | 1 | 1 | 2 |
+| **总计** | **17** | **16** | **33** |
+
+### 测试体系结构
+
+```
+tests/
+├── unit/                          # 单元测试
+│   ├── excel-utils.test.js        # Excel 工具函数测试
+│   └── core-functions.test.js     # 核心功能测试
+├── integration/                   # 集成测试
+│   └── functional-flow.test.js    # 功能流程测试
+├── e2e/                          # 端到端测试
+│   ├── specs/
+│   │   └── excel-tool.spec.js    # Playwright E2E 测试
+│   └── playwright.config.js      # Playwright 配置
+├── fixtures/                     # 测试数据
+│   └── test-data-generator.js    # 测试数据生成器
+├── test-files/                   # 测试用 Excel 文件
+└── README.md                     # 本文档
+```
+
+---
+
+*本文档合并了原 CLICK_TEST_PLAN.md、COMPREHENSIVE_TEST_PLAN.md、IMPROVEMENT_PLAN.md、TEST_SUMMARY.md 等散落文档*
