@@ -1,61 +1,13 @@
 # macOS
 .DS_Store
-.AppleDouble
-.LSOverride
 
 # Windows
 Thumbs.db
-Thumbs.db:encryptable
-ehthumbs.db
-ehthumbs_vista.db
-*.stackdump
-[Dd]esktop.ini
 
-# Linux
-*~
-.nfs*
-
-# Editor directories and files
-.idea/
+# Editor
 .vscode/
+.idea/
 *.swp
-*.swo
-*~
 
 # Logs
 *.log
-
-# Local environment
-.env
-.env.local
-
-# Node.js
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-package-lock.json
-
-# Test generated files
-tests/*-screenshots/
-tests/*-downloads/
-tests/test-results/
-tests/playwright-report/
-tests/reports/
-
-# Keep test reports structure but ignore generated content
-!tests/reports/.gitkeep
-
-# Temporary files
-*.tmp
-*.temp
-*.cache
-
-# Build outputs
-dist/
-build/
-out/
-
-# Coverage
-coverage/
-.nyc_output/
