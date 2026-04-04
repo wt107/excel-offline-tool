@@ -18,18 +18,35 @@
 
 ## 🚀 快速开始
 
-**无需安装，双击即用**
+### 方式一：下载 ZIP 包（推荐）
 
-### 方式一：直接下载使用
-1. 下载 `excel.html` 文件
-2. 双击用浏览器打开即可使用
+1. 点击 GitHub 页面右侧的 **Releases**
+2. 下载 `excel-offline-tool-v1.0.0.zip`
+3. 解压到任意文件夹
+4. 双击 `excel.html` 即可使用
 
 ### 方式二：克隆仓库
+
 ```bash
 git clone https://github.com/wt107/excel-offline-tool.git
 cd excel-offline-tool
 open excel.html
 ```
+
+### 方式三：手动下载文件
+
+**必须下载的文件**（缺一不可）：
+
+```
+excel-offline-tool/
+├── excel.html           # 主程序
+└── lib/
+    ├── jszip.min.js     # ZIP 库
+    └── xlsx.bundle.js   # Excel 库
+```
+
+1. 下载上述文件，保持文件夹结构
+2. 双击 `excel.html` 打开使用
 
 ---
 
