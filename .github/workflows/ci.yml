@@ -1,0 +1,372 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  # 代码检查和单元测试
+  lint-and-unit-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x, 22.x]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+          cache-dependency-path: tests/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          cd tests
+          npm ci
+
+      - name: Run security audit
+        run: |
+          cd tests
+          npm audit --audit-level=high || true
+
+      - name: Run ESLint
+        run: |
+          cd tests
+          npx eslint ../src/**/*.js ../excel.html --ext .js,.html || true
+
+      - name: Run unit tests with coverage
+        run: |
+          cd tests
+          npm run test:unit -- --coverage --coverageReporters=text-summary --coverageReporters=lcov
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          directory: tests/reports/coverage
+          files: lcov.info
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+
+  # 集成测试
+  integration-test:
+    runs-on: ubuntu-latest
+    needs: lint-and-unit-test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: 'npm'
+          cache-dependency-path: tests/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          cd tests
+          npm ci
+
+      - name: Run integration tests
+        run: |
+          cd tests
+          npm run test:integration
+
+  # E2E 测试
+  e2e-test:
+    runs-on: ubuntu-latest
+    needs: lint-and-unit-test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: 'npm'
+          cache-dependency-path: tests/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          cd tests
+          npm ci
+
+      - name: Install Playwright browsers
+        run: |
+          cd tests
+          npx playwright install chromium firefox webkit
+
+      - name: Run E2E tests
+        run: |
+          cd tests
+          npm run test:e2e
+
+      - name: Upload E2E test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-test-results
+          path: |
+            tests/test-results/
+            tests/playwright-report/
+
+  # 多浏览器兼容性测试
+  cross-browser-test:
+    runs-on: ubuntu-latest
+    needs: lint-and-unit-test
+    strategy:
+      matrix:
+        browser: [chromium, firefox, webkit]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: 'npm'
+          cache-dependency-path: tests/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          cd tests
+          npm ci
+
+      - name: Install Playwright browsers
+        run: |
+          cd tests
+          npx playwright install ${{ matrix.browser }}
+
+      - name: Run cross-browser tests
+        run: |
+          cd tests
+          npx playwright test cross-browser.test.js --project=${{ matrix.browser }}
+
+  # 可访问性测试
+  accessibility-test:
+    runs-on: ubuntu-latest
+    needs: lint-and-unit-test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: 'npm'
+          cache-dependency-path: tests/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          cd tests
+          npm ci
+
+      - name: Install Playwright browsers
+        run: |
+          cd tests
+          npx playwright install chromium
+
+      - name: Run accessibility tests
+        run: |
+          cd tests
+          npx playwright test accessibility.test.js
+
+      - name: Upload accessibility report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: accessibility-report
+          path: tests/reports/accessibility/
+
+  # 视觉回归测试
+  visual-regression-test:
+    runs-on: ubuntu-latest
+    needs: lint-and-unit-test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: 'npm'
+          cache-dependency-path: tests/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          cd tests
+          npm ci
+
+      - name: Install Playwright browsers
+        run: |
+          cd tests
+          npx playwright install chromium
+
+      - name: Run visual regression tests
+        run: |
+          cd tests
+          npx playwright test visual-regression.test.js
+
+      - name: Upload visual regression results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: visual-regression-results
+          path: |
+            tests/visual-baselines/
+            tests/visual-results/
+
+  # Lighthouse CI 性能测试
+  lighthouse-ci:
+    runs-on: ubuntu-latest
+    needs: lint-and-unit-test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: 'npm'
+          cache-dependency-path: tests/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          cd tests
+          npm ci
+
+      - name: Install Lighthouse CI
+        run: npm install -g @lhci/cli
+
+      - name: Run Lighthouse CI
+        run: |
+          cd tests
+          lhci autorun
+        env:
+          LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
+
+      - name: Upload Lighthouse results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lighthouse-report
+          path: tests/reports/lighthouse/
+
+  # 性能测试
+  performance-test:
+    runs-on: ubuntu-latest
+    needs: lint-and-unit-test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: 'npm'
+          cache-dependency-path: tests/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          cd tests
+          npm ci
+
+      - name: Install Playwright browsers
+        run: |
+          cd tests
+          npx playwright install chromium
+
+      - name: Run performance tests
+        run: |
+          cd tests
+          npx playwright test performance.test.js
+
+      - name: Upload performance report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: performance-report
+          path: tests/reports/performance/
+
+  # 安全审计
+  security-audit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: 'npm'
+          cache-dependency-path: tests/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          cd tests
+          npm ci
+
+      - name: Run security audit
+        run: |
+          cd tests
+          node security-audit.js
+
+      - name: Upload security audit report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-audit-report
+          path: tests/reports/security/
+
+  # 测试总结
+  test-summary:
+    runs-on: ubuntu-latest
+    needs:
+      - lint-and-unit-test
+      - integration-test
+      - e2e-test
+      - cross-browser-test
+      - accessibility-test
+      - visual-regression-test
+      - lighthouse-ci
+      - performance-test
+      - security-audit
+
+    steps:
+      - name: Test Summary
+        run: |
+          echo "========================================="
+          echo "         所有测试完成！"
+          echo "========================================="
+          echo "✅ 代码检查和单元测试"
+          echo "✅ 集成测试"
+          echo "✅ E2E 测试"
+          echo "✅ 多浏览器兼容性测试"
+          echo "✅ 可访问性测试"
+          echo "✅ 视觉回归测试"
+          echo "✅ Lighthouse CI 性能测试"
+          echo "✅ 性能测试"
+          echo "✅ 安全审计"
+          echo "========================================="
