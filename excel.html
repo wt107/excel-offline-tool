@@ -3,6 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'blob:'; img-src 'self' data: blob:;">
+    <meta name="description" content="Excel离线处理工具 - 文件仅在本地处理，不会上传服务器">
     <title>Excel文件处理工具</title>
     <!-- 使用 xlsx-js-style 替代标准 SheetJS，支持样式读写 -->
     <script src="lib/xlsx.bundle.js"></script>
@@ -43,7 +45,7 @@
         }
 
         .header p {
-            opacity: 0.9;
+            opacity: 1;
         }
 
         .mode-selector {
@@ -88,7 +90,7 @@
             display: flex;
             align-items: center;
             gap: 10px;
-            color: #6c757d;
+            color: #495057;
             font-weight: 500;
             position: relative;
         }
@@ -190,7 +192,7 @@
 
         .upload-text {
             font-size: 1.2em;
-            color: #6c757d;
+            color: #495057;
             margin-bottom: 10px;
         }
 
@@ -235,7 +237,7 @@
         }
 
         .btn-secondary {
-            background: #6c757d;
+            background: #495057;
             color: white;
         }
 
@@ -262,7 +264,7 @@
         }
 
         .btn:disabled {
-            opacity: 0.5;
+            opacity: 1;
             cursor: not-allowed;
             transform: none !important;
         }
@@ -369,7 +371,7 @@
 
         .file-size {
             font-size: 0.9em;
-            color: #6c757d;
+            color: #495057;
         }
 
         .toast {
@@ -451,7 +453,7 @@
         }
 
         .stat-label {
-            color: #6c757d;
+            color: #495057;
             font-size: 0.9em;
         }
 
@@ -492,7 +494,7 @@
 
         .file-list-sheets {
             font-size: 0.85em;
-            color: #6c757d;
+            color: #495057;
         }
 
         .file-list-actions {
@@ -569,7 +571,7 @@
         }
 
         .selected-count {
-            color: #6c757d;
+            color: #495057;
             font-weight: 500;
         }
 
@@ -598,7 +600,7 @@
 
         .loading-text {
             font-size: 1.1em;
-            color: #6c757d;
+            color: #495057;
         }
 
         .progress-container {
@@ -748,7 +750,7 @@
                 <div class="card">
                     <div class="card-title" id="step3Title">配置选项</div>
                     <div id="splitSheetOptions" style="display: none;">
-                        <p style="color: #6c757d; margin-bottom: 20px;">已选择的工作表将被拆分为独立的 Excel 文件，并尽量保留常用格式</p>
+                        <p style="color: #495057; margin-bottom: 20px;">已选择的工作表将被拆分为独立的 Excel 文件，并尽量保留常用格式</p>
                         <div class="controls">
                             <div class="controls-left">
                                 <button class="btn btn-secondary" onclick="selectAllSheets()">全选</button>
@@ -761,7 +763,7 @@
                         <div style="margin-bottom: 20px;">
                             <label style="font-weight: 600; color: #495057; display: block; margin-bottom: 10px;">表头行数</label>
                             <input type="number" id="splitHeaderRows" value="1" min="0" max="10" style="padding: 10px; border: 2px solid #e9ecef; border-radius: 8px; width: 100px; font-size: 1em;">
-                            <p style="color: #6c757d; font-size: 0.9em; margin-top: 5px;">指定表头占用的行数（0表示无表头）</p>
+                            <p style="color: #495057; font-size: 0.9em; margin-top: 5px;">指定表头占用的行数（0表示无表头）</p>
                         </div>
                         <div style="margin-bottom: 20px;">
                             <label style="font-weight: 600; color: #495057; display: block; margin-bottom: 10px;">选择拆分列（按该列的值分组拆分行）</label>
@@ -769,16 +771,16 @@
                         </div>
                     </div>
                     <div id="splitColumnVerticalOptions" style="display: none;">
-                        <p style="color: #6c757d; margin-bottom: 20px;">竖向拆分：为每个选中的列生成独立文件，每个文件包含固定表头列 + 一个数据列</p>
+                        <p style="color: #495057; margin-bottom: 20px;">竖向拆分：为每个选中的列生成独立文件，每个文件包含固定表头列 + 一个数据列</p>
                         <div style="margin-bottom: 20px;">
                             <label style="font-weight: 600; color: #495057; display: block; margin-bottom: 10px;">表头行数</label>
                             <input type="number" id="splitVerticalHeaderRows" value="1" min="0" max="10" style="padding: 10px; border: 2px solid #e9ecef; border-radius: 8px; width: 100px; font-size: 1em;">
-                            <p style="color: #6c757d; font-size: 0.9em; margin-top: 5px;">指定表头占用的行数（0表示无表头）</p>
+                            <p style="color: #495057; font-size: 0.9em; margin-top: 5px;">指定表头占用的行数（0表示无表头）</p>
                         </div>
                         <div style="margin-bottom: 20px;">
                             <label style="font-weight: 600; color: #495057; display: block; margin-bottom: 10px;">选择固定表头列（可多选，每个拆分文件都会包含）</label>
                             <div class="sheet-list" id="verticalKeyColumnList"></div>
-                            <p style="color: #6c757d; font-size: 0.9em; margin-top: 5px;">如：姓名、ID等标识列，会被包含在每个生成的文件中</p>
+                            <p style="color: #495057; font-size: 0.9em; margin-top: 5px;">如：姓名、ID等标识列，会被包含在每个生成的文件中</p>
                         </div>
                         <div style="margin-bottom: 20px;">
                             <label style="font-weight: 600; color: #495057; display: block; margin-bottom: 10px;">选择要拆分的数据列（可多选）</label>
@@ -793,7 +795,7 @@
                         </div>
                     </div>
                     <div id="mergeFileOptions" style="display: none;">
-                        <p style="color: #6c757d; margin-bottom: 20px;">所有上传的Excel文件将被合并为一个文件，每个文件的工作表将作为新文件的独立Sheet页</p>
+                        <p style="color: #495057; margin-bottom: 20px;">所有上传的Excel文件将被合并为一个文件，每个文件的工作表将作为新文件的独立Sheet页</p>
                         <div class="controls">
                             <div class="controls-left">
                                 <button class="btn btn-secondary" onclick="selectAllSheets()">全选</button>
@@ -807,13 +809,13 @@
                         <div class="separator-option">
                             <label>表头行数</label>
                             <input type="number" id="headerRows" value="1" min="0" max="10" style="padding: 10px; border: 2px solid #e9ecef; border-radius: 8px; width: 100px; font-size: 1em;">
-                            <p style="color: #6c757d; font-size: 0.9em; margin-top: 5px;">指定表头占用的行数（0表示无表头），表头仅保留一次</p>
+                            <p style="color: #495057; font-size: 0.9em; margin-top: 5px;">指定表头占用的行数（0表示无表头），表头仅保留一次</p>
                         </div>
                         <div class="separator-option">
                             <label>来源列</label>
-                            <p style="color: #6c757d; font-size: 0.9em; margin-top: 5px;">系统会自动添加来源列，格式为 文件名-工作表名</p>
+                            <p style="color: #495057; font-size: 0.9em; margin-top: 5px;">系统会自动添加来源列，格式为 文件名-工作表名</p>
                         </div>
-                        <p style="color: #6c757d; margin-bottom: 20px;">选择要合并的工作表，数据将按选择顺序依次合并到新工作表中</p>
+                        <p style="color: #495057; margin-bottom: 20px;">选择要合并的工作表，数据将按选择顺序依次合并到新工作表中</p>
                         <div class="controls">
                             <div class="controls-left">
                                 <button class="btn btn-secondary" onclick="selectAllSheets()">全选</button>
