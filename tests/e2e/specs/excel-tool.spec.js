@@ -214,10 +214,10 @@ test.describe('Excel 离线工具 E2E 测试', () => {
   // 文件上传
   // ─────────────────────────────────────────────────────────────
   test.describe('文件上传', () => {
-    test('上传有效 XLSX 文件应解析成功', async ({ skip }) => {
+    test('上传有效 XLSX 文件应解析成功', async () => {
       // 跳过如果测试文件不存在
       if (!fs.existsSync(TEST_FILES.singleSheet)) {
-        skip();
+        test.skip();
         return;
       }
       
@@ -227,9 +227,9 @@ test.describe('Excel 离线工具 E2E 测试', () => {
       expect(toastText).toContain('成功');
     });
 
-    test('上传后应自动进入第二步', async ({ skip }) => {
+    test('上传后应自动进入第二步', async () => {
       if (!fs.existsSync(TEST_FILES.singleSheet)) {
-        skip();
+        test.skip();
         return;
       }
       
@@ -244,9 +244,9 @@ test.describe('Excel 离线工具 E2E 测试', () => {
   // 按工作表拆分
   // ─────────────────────────────────────────────────────────────
   test.describe('按工作表拆分', () => {
-    test('应显示所有工作表', async ({ skip }) => {
+    test('应显示所有工作表', async () => {
       if (!fs.existsSync(TEST_FILES.multiSheet)) {
-        skip();
+        test.skip();
         return;
       }
       
@@ -257,9 +257,9 @@ test.describe('Excel 离线工具 E2E 测试', () => {
       expect(sheets).toBeGreaterThan(0);
     });
 
-    test('全选应选中所有工作表', async ({ skip }) => {
+    test('全选应选中所有工作表', async () => {
       if (!fs.existsSync(TEST_FILES.multiSheet)) {
-        skip();
+        test.skip();
         return;
       }
       
@@ -277,9 +277,9 @@ test.describe('Excel 离线工具 E2E 测试', () => {
   // 重置功能
   // ─────────────────────────────────────────────────────────────
   test.describe('重置功能', () => {
-    test('重置应返回到第一步', async ({ skip }) => {
+    test('重置应返回到第一步', async () => {
       if (!fs.existsSync(TEST_FILES.singleSheet)) {
-        skip();
+        test.skip();
         return;
       }
       
@@ -297,9 +297,9 @@ test.describe('Excel 离线工具 E2E 测试', () => {
   // 性能测试
   // ─────────────────────────────────────────────────────────────
   test.describe('性能测试', () => {
-    test('文件解析应在合理时间内完成', async ({ skip }) => {
+    test('文件解析应在合理时间内完成', async () => {
       if (!fs.existsSync(TEST_FILES.singleSheet)) {
-        skip();
+        test.skip();
         return;
       }
       

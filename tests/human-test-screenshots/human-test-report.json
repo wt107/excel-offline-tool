@@ -1,0 +1,226 @@
+{
+  "phase": "拟人操作测试 (Headed Step-by-Step)",
+  "timestamp": "2026-04-04T01:54:23.678Z",
+  "summary": {
+    "total": 43,
+    "passed": 43,
+    "failed": 0
+  },
+  "results": [
+    {
+      "name": "页面标题",
+      "status": "pass",
+      "detail": "Excel文件处理工具"
+    },
+    {
+      "name": "标题文字",
+      "status": "pass",
+      "detail": "📊 Excel文件处理工具"
+    },
+    {
+      "name": "模式按钮数量",
+      "status": "pass",
+      "detail": "5个"
+    },
+    {
+      "name": "默认第一步",
+      "status": "pass",
+      "detail": "step active"
+    },
+    {
+      "name": "上传区域可见",
+      "status": "pass",
+      "detail": "可见"
+    },
+    {
+      "name": "上传后进入步骤2",
+      "status": "pass",
+      "detail": "step active"
+    },
+    {
+      "name": "工作表列表显示",
+      "status": "pass",
+      "detail": "3个工作表"
+    },
+    {
+      "name": "工作表默认全选",
+      "status": "pass",
+      "detail": "3/3"
+    },
+    {
+      "name": "进入步骤3",
+      "status": "pass",
+      "detail": "step active"
+    },
+    {
+      "name": "拆分选项显示",
+      "status": "pass",
+      "detail": "可见"
+    },
+    {
+      "name": "取消全选",
+      "status": "pass",
+      "detail": "已选择: 0 个工作表"
+    },
+    {
+      "name": "全选",
+      "status": "pass",
+      "detail": "已选择: 3 个工作表"
+    },
+    {
+      "name": "结果区域显示",
+      "status": "pass",
+      "detail": "可见"
+    },
+    {
+      "name": "生成文件数",
+      "status": "pass",
+      "detail": "3"
+    },
+    {
+      "name": "总大小显示",
+      "status": "pass",
+      "detail": "0 Bytes"
+    },
+    {
+      "name": "下载按钮显示",
+      "status": "pass",
+      "detail": "可见"
+    },
+    {
+      "name": "结果文件列表",
+      "status": "pass",
+      "detail": "3个文件"
+    },
+    {
+      "name": "下载按钮可点击",
+      "status": "pass",
+      "detail": "点击下载无报错"
+    },
+    {
+      "name": "切换到按列拆分",
+      "status": "pass",
+      "detail": "mode-btn active"
+    },
+    {
+      "name": "选择工作表后可继续",
+      "status": "pass",
+      "detail": "可用"
+    },
+    {
+      "name": "列列表显示",
+      "status": "pass",
+      "detail": "4列"
+    },
+    {
+      "name": "选择列后可继续",
+      "status": "pass",
+      "detail": "可用"
+    },
+    {
+      "name": "横向拆分结果显示",
+      "status": "pass",
+      "detail": "可见"
+    },
+    {
+      "name": "横向拆分文件数",
+      "status": "pass",
+      "detail": "3"
+    },
+    {
+      "name": "竖向拆分列选择显示",
+      "status": "pass",
+      "detail": "固定列5个, 数据列5个"
+    },
+    {
+      "name": "选择列后可继续",
+      "status": "pass",
+      "detail": "可用"
+    },
+    {
+      "name": "竖向拆分结果显示",
+      "status": "pass",
+      "detail": "可见"
+    },
+    {
+      "name": "合并文件列表显示",
+      "status": "pass",
+      "detail": "2个文件"
+    },
+    {
+      "name": "合并结果显示",
+      "status": "pass",
+      "detail": "可见"
+    },
+    {
+      "name": "合并输出文件数",
+      "status": "pass",
+      "detail": "1"
+    },
+    {
+      "name": "工作表数据合并可继续",
+      "status": "pass",
+      "detail": "可用"
+    },
+    {
+      "name": "工作表合并结果显示",
+      "status": "pass",
+      "detail": "可见"
+    },
+    {
+      "name": "重新开始按钮可见",
+      "status": "pass",
+      "detail": "可见"
+    },
+    {
+      "name": "重置后回到第一步",
+      "status": "pass",
+      "detail": "step active"
+    },
+    {
+      "name": "重置后列表清空",
+      "status": "pass",
+      "detail": "空"
+    },
+    {
+      "name": "非Excel文件报错",
+      "status": "pass",
+      "detail": "显示错误"
+    },
+    {
+      "name": "multi-sheet.xlsx 数据完整性",
+      "status": "pass",
+      "detail": "3个工作表, 11行数据"
+    },
+    {
+      "name": "split-by-column.xlsx 数据完整性",
+      "status": "pass",
+      "detail": "1个工作表, 6行数据"
+    },
+    {
+      "name": "vertical-split.xlsx 数据完整性",
+      "status": "pass",
+      "detail": "1个工作表, 4行数据"
+    },
+    {
+      "name": "merge-1.xlsx 数据完整性",
+      "status": "pass",
+      "detail": "2个工作表, 6行数据"
+    },
+    {
+      "name": "merge-2.xlsx 数据完整性",
+      "status": "pass",
+      "detail": "1个工作表, 3行数据"
+    },
+    {
+      "name": "切换模式后回到第一步",
+      "status": "pass",
+      "detail": "step active"
+    },
+    {
+      "name": "上传提示更新",
+      "status": "pass",
+      "detail": "或点击选择文件（支持.xlsx和.xls格式）"
+    }
+  ]
+}

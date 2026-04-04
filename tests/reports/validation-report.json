@@ -15,7 +15,7 @@
       "details": {
         "path": "/private/tmp/excel-offline-tool/excel.html"
       },
-      "timestamp": "2026-04-03T13:25:42.305Z"
+      "timestamp": "2026-04-04T01:21:02.444Z"
     },
     {
       "category": "文件结构",
@@ -25,7 +25,7 @@
       "details": {
         "path": "/private/tmp/excel-offline-tool/src/core/constants.js"
       },
-      "timestamp": "2026-04-03T13:25:42.306Z"
+      "timestamp": "2026-04-04T01:21:02.445Z"
     },
     {
       "category": "文件结构",
@@ -35,7 +35,7 @@
       "details": {
         "path": "/private/tmp/excel-offline-tool/src/utils/excel-utils.js"
       },
-      "timestamp": "2026-04-03T13:25:42.306Z"
+      "timestamp": "2026-04-04T01:21:02.445Z"
     },
     {
       "category": "文件结构",
@@ -45,7 +45,7 @@
       "details": {
         "path": "/private/tmp/excel-offline-tool/workers/excel-processor.worker.js"
       },
-      "timestamp": "2026-04-03T13:25:42.306Z"
+      "timestamp": "2026-04-04T01:21:02.445Z"
     },
     {
       "category": "文件结构",
@@ -55,7 +55,7 @@
       "details": {
         "path": "/private/tmp/excel-offline-tool/lib/xlsx.bundle.js"
       },
-      "timestamp": "2026-04-03T13:25:42.306Z"
+      "timestamp": "2026-04-04T01:21:02.445Z"
     },
     {
       "category": "文件结构",
@@ -65,7 +65,7 @@
       "details": {
         "path": "/private/tmp/excel-offline-tool/lib/jszip.min.js"
       },
-      "timestamp": "2026-04-03T13:25:42.306Z"
+      "timestamp": "2026-04-04T01:21:02.445Z"
     },
     {
       "category": "文件结构",
@@ -73,17 +73,17 @@
       "status": "pass",
       "message": "测试数据目录存在",
       "details": {},
-      "timestamp": "2026-04-03T13:25:42.306Z"
+      "timestamp": "2026-04-04T01:21:02.446Z"
     },
     {
       "category": "代码质量",
       "name": "HTML 文件大小",
       "status": "pass",
-      "message": "大小: 153.91 KB",
+      "message": "大小: 154.21 KB",
       "details": {
-        "size": 157604
+        "size": 157910
       },
-      "timestamp": "2026-04-03T13:25:42.310Z"
+      "timestamp": "2026-04-04T01:21:02.448Z"
     },
     {
       "category": "代码质量",
@@ -91,7 +91,7 @@
       "status": "pass",
       "message": "包含 DOCTYPE",
       "details": {},
-      "timestamp": "2026-04-03T13:25:42.310Z"
+      "timestamp": "2026-04-04T01:21:02.448Z"
     },
     {
       "category": "代码质量",
@@ -99,7 +99,7 @@
       "status": "pass",
       "message": "存在 escapeHtml 函数",
       "details": {},
-      "timestamp": "2026-04-03T13:25:42.310Z"
+      "timestamp": "2026-04-04T01:21:02.448Z"
     },
     {
       "category": "代码质量",
@@ -107,7 +107,7 @@
       "status": "pass",
       "message": "存在文件大小限制",
       "details": {},
-      "timestamp": "2026-04-03T13:25:42.310Z"
+      "timestamp": "2026-04-04T01:21:02.448Z"
     },
     {
       "category": "代码质量",
@@ -115,7 +115,7 @@
       "status": "pass",
       "message": "存在 try-catch 错误处理",
       "details": {},
-      "timestamp": "2026-04-03T13:25:42.310Z"
+      "timestamp": "2026-04-04T01:21:02.448Z"
     },
     {
       "category": "代码质量",
@@ -123,7 +123,7 @@
       "status": "pass",
       "message": "使用 Web Worker 优化性能",
       "details": {},
-      "timestamp": "2026-04-03T13:25:42.310Z"
+      "timestamp": "2026-04-04T01:21:02.448Z"
     },
     {
       "category": "功能实现",
@@ -131,7 +131,7 @@
       "status": "pass",
       "message": "功能已实现",
       "details": {},
-      "timestamp": "2026-04-03T13:25:42.311Z"
+      "timestamp": "2026-04-04T01:21:02.449Z"
     },
     {
       "category": "功能实现",
@@ -139,7 +139,7 @@
       "status": "pass",
       "message": "功能已实现",
       "details": {},
-      "timestamp": "2026-04-03T13:25:42.311Z"
+      "timestamp": "2026-04-04T01:21:02.449Z"
     },
     {
       "category": "功能实现",
@@ -147,7 +147,7 @@
       "status": "pass",
       "message": "功能已实现",
       "details": {},
-      "timestamp": "2026-04-03T13:25:42.311Z"
+      "timestamp": "2026-04-04T01:21:02.449Z"
     },
     {
       "category": "功能实现",
@@ -155,7 +155,7 @@
       "status": "pass",
       "message": "功能已实现",
       "details": {},
-      "timestamp": "2026-04-03T13:25:42.311Z"
+      "timestamp": "2026-04-04T01:21:02.449Z"
     },
     {
       "category": "功能实现",
@@ -163,7 +163,7 @@
       "status": "pass",
       "message": "功能已实现",
       "details": {},
-      "timestamp": "2026-04-03T13:25:42.311Z"
+      "timestamp": "2026-04-04T01:21:02.449Z"
     },
     {
       "category": "功能实现",
@@ -171,7 +171,7 @@
       "status": "pass",
       "message": "支持 XLSX/XLS 文件上传",
       "details": {},
-      "timestamp": "2026-04-03T13:25:42.311Z"
+      "timestamp": "2026-04-04T01:21:02.449Z"
     },
     {
       "category": "功能实现",
@@ -179,7 +179,7 @@
       "status": "pass",
       "message": "支持拖拽上传",
       "details": {},
-      "timestamp": "2026-04-03T13:25:42.311Z"
+      "timestamp": "2026-04-04T01:21:02.449Z"
     },
     {
       "category": "功能实现",
@@ -187,7 +187,7 @@
       "status": "pass",
       "message": "支持文件下载",
       "details": {},
-      "timestamp": "2026-04-03T13:25:42.311Z"
+      "timestamp": "2026-04-04T01:21:02.449Z"
     },
     {
       "category": "功能实现",
@@ -195,7 +195,7 @@
       "status": "pass",
       "message": "支持 ZIP 打包",
       "details": {},
-      "timestamp": "2026-04-03T13:25:42.311Z"
+      "timestamp": "2026-04-04T01:21:02.449Z"
     },
     {
       "category": "PRD 符合性",
@@ -203,7 +203,7 @@
       "status": "pass",
       "message": "流程步骤存在",
       "details": {},
-      "timestamp": "2026-04-03T13:25:42.311Z"
+      "timestamp": "2026-04-04T01:21:02.450Z"
     },
     {
       "category": "PRD 符合性",
@@ -211,7 +211,7 @@
       "status": "pass",
       "message": "流程步骤存在",
       "details": {},
-      "timestamp": "2026-04-03T13:25:42.311Z"
+      "timestamp": "2026-04-04T01:21:02.450Z"
     },
     {
       "category": "PRD 符合性",
@@ -219,7 +219,7 @@
       "status": "pass",
       "message": "流程步骤存在",
       "details": {},
-      "timestamp": "2026-04-03T13:25:42.311Z"
+      "timestamp": "2026-04-04T01:21:02.450Z"
     },
     {
       "category": "PRD 符合性",
@@ -227,7 +227,7 @@
       "status": "pass",
       "message": "流程步骤存在",
       "details": {},
-      "timestamp": "2026-04-03T13:25:42.311Z"
+      "timestamp": "2026-04-04T01:21:02.450Z"
     },
     {
       "category": "PRD 符合性",
@@ -235,7 +235,7 @@
       "status": "warning",
       "message": "缺少隐私说明",
       "details": {},
-      "timestamp": "2026-04-03T13:25:42.311Z"
+      "timestamp": "2026-04-04T01:21:02.450Z"
     },
     {
       "category": "PRD 符合性",
@@ -243,7 +243,7 @@
       "status": "pass",
       "message": "包含格式保留说明",
       "details": {},
-      "timestamp": "2026-04-03T13:25:42.311Z"
+      "timestamp": "2026-04-04T01:21:02.450Z"
     },
     {
       "category": "PRD 符合性",
@@ -251,7 +251,7 @@
       "status": "pass",
       "message": "有错误提示机制",
       "details": {},
-      "timestamp": "2026-04-03T13:25:42.311Z"
+      "timestamp": "2026-04-04T01:21:02.450Z"
     },
     {
       "category": "PRD 符合性",
@@ -259,7 +259,7 @@
       "status": "pass",
       "message": "有进度指示",
       "details": {},
-      "timestamp": "2026-04-03T13:25:42.311Z"
+      "timestamp": "2026-04-04T01:21:02.450Z"
     },
     {
       "category": "文档完整性",
@@ -269,7 +269,7 @@
       "details": {
         "required": true
       },
-      "timestamp": "2026-04-03T13:25:42.312Z"
+      "timestamp": "2026-04-04T01:21:02.450Z"
     },
     {
       "category": "文档完整性",
@@ -279,7 +279,7 @@
       "details": {
         "required": true
       },
-      "timestamp": "2026-04-03T13:25:42.312Z"
+      "timestamp": "2026-04-04T01:21:02.450Z"
     },
     {
       "category": "文档完整性",
@@ -289,7 +289,7 @@
       "details": {
         "required": false
       },
-      "timestamp": "2026-04-03T13:25:42.312Z"
+      "timestamp": "2026-04-04T01:21:02.451Z"
     },
     {
       "category": "文档完整性",
@@ -299,7 +299,7 @@
       "details": {
         "required": false
       },
-      "timestamp": "2026-04-03T13:25:42.313Z"
+      "timestamp": "2026-04-04T01:21:02.451Z"
     },
     {
       "category": "测试覆盖",
@@ -307,7 +307,7 @@
       "status": "pass",
       "message": "测试目录存在",
       "details": {},
-      "timestamp": "2026-04-03T13:25:42.313Z"
+      "timestamp": "2026-04-04T01:21:02.451Z"
     },
     {
       "category": "测试覆盖",
@@ -315,7 +315,7 @@
       "status": "pass",
       "message": "有单元测试",
       "details": {},
-      "timestamp": "2026-04-03T13:25:42.313Z"
+      "timestamp": "2026-04-04T01:21:02.452Z"
     },
     {
       "category": "测试覆盖",
@@ -323,7 +323,7 @@
       "status": "pass",
       "message": "有集成测试",
       "details": {},
-      "timestamp": "2026-04-03T13:25:42.313Z"
+      "timestamp": "2026-04-04T01:21:02.452Z"
     },
     {
       "category": "测试覆盖",
@@ -331,8 +331,8 @@
       "status": "pass",
       "message": "有 E2E 测试",
       "details": {},
-      "timestamp": "2026-04-03T13:25:42.314Z"
+      "timestamp": "2026-04-04T01:21:02.452Z"
     }
   ],
-  "generatedAt": "2026-04-03T13:25:42.314Z"
+  "generatedAt": "2026-04-04T01:21:02.453Z"
 }

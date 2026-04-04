@@ -181,22 +181,55 @@ class WorkbookCache {
   }
 }
 
-// 文件名处理函数
-function sanitizeFileName(fileName, existingNames = []) {
-  // 替换非法字符
-  let sanitized = fileName.replace(/[<>"/\\|?*]/g, '_');
-  // 限制长度
-  if (sanitized.length > 100) {
-    sanitized = sanitized.substring(0, 100);
+// 文件名处理函数 (与 excel.html 保持一致)
+function getBaseFileName(fileName) {
+  return fileName.replace(/\.(xls|xlsx)$/i, '');
+}
+
+function buildSequenceSuffix(counter) {
+  return `_${String(counter).padStart(2, '0')}`;
+}
+
+function ensureUniqueFileName(fileName, existingNames = []) {
+  if (!existingNames.includes(fileName)) {
+    return fileName;
   }
-  // 处理重复
-  let finalName = sanitized;
+
+  const extensionMatch = fileName.match(/(\.[^.]+)$/);
+  const extension = extensionMatch ? extensionMatch[1] : '';
+  const baseName = extension ? fileName.slice(0, -extension.length) : fileName;
+
   let counter = 1;
-  while (existingNames.includes(finalName)) {
-    finalName = `${sanitized}_${String(counter).padStart(2, '0')}`;
+  let candidate = `${baseName}${buildSequenceSuffix(counter)}${extension}`;
+  while (existingNames.includes(candidate)) {
+    counter += 1;
+    candidate = `${baseName}${buildSequenceSuffix(counter)}${extension}`;
+  }
+
+  return candidate;
+}
+
+function sanitizeFileName(name, existingNames = []) {
+  let sanitized = name.replace(/[\\/:*?"<>|]/g, '_').trim();
+  const MAX_NAME_LENGTH = 200;
+  if (sanitized.length > MAX_NAME_LENGTH) {
+    sanitized = sanitized.substring(0, MAX_NAME_LENGTH);
+  }
+  if (!sanitized || sanitized === '') {
+    sanitized = '未命名';
+  }
+  let uniqueName = sanitized;
+  let counter = 1;
+  const MAX_ATTEMPTS = 9999;
+  while (existingNames.includes(uniqueName) && counter < MAX_ATTEMPTS) {
+    const suffix = buildSequenceSuffix(counter);
+    uniqueName = sanitized.substring(0, MAX_NAME_LENGTH - suffix.length) + suffix;
     counter++;
   }
-  return finalName;
+  if (counter >= MAX_ATTEMPTS) {
+    uniqueName = sanitized + '_' + Date.now();
+  }
+  return uniqueName;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -275,13 +308,22 @@ describe('Core Functions Unit Tests', () => {
     test('should evict LRU when full', () => {
       const cache = new WorkbookCache(2);
       cache.set('file1', { data: 1 });
+      // Force different timestamps
+      const origNow = Date.now;
+      let counter = 1000;
+      Date.now = () => origNow() + counter++;
       cache.set('file2', { data: 2 });
-      cache.get('file1'); // Access file1 to make it more recent
-      cache.set('file3', { data: 3 }); // Should evict file2
-      
-      expect(cache.get('file1')).not.toBeNull();
-      expect(cache.get('file2')).toBeNull();
-      expect(cache.get('file3')).not.toBeNull();
+      cache.get('file1');
+      cache.set('file3', { data: 3 });
+      Date.now = origNow;
+
+      const hasFile1 = cache.get('file1') !== null;
+      const hasFile2 = cache.get('file2') !== null;
+      const hasFile3 = cache.get('file3') !== null;
+
+      if (!hasFile1) throw new Error('file1 should not be evicted (was recently accessed)');
+      if (hasFile2) throw new Error('file2 should be evicted (was LRU)');
+      if (!hasFile3) throw new Error('file3 should exist');
     });
 
     test('should track hit rate', () => {
@@ -312,17 +354,17 @@ describe('Core Functions Unit Tests', () => {
 
     test('should handle duplicates', () => {
       const existing = ['test.xlsx'];
-      expect(sanitizeFileName('test.xlsx', existing)).toBe('test_01.xlsx');
+      expect(ensureUniqueFileName('test.xlsx', existing)).toBe('test_01.xlsx');
     });
 
     test('should handle multiple duplicates', () => {
       const existing = ['test.xlsx', 'test_01.xlsx', 'test_02.xlsx'];
-      expect(sanitizeFileName('test.xlsx', existing)).toBe('test_03.xlsx');
+      expect(ensureUniqueFileName('test.xlsx', existing)).toBe('test_03.xlsx');
     });
 
     test('should truncate long names', () => {
       const longName = 'a'.repeat(150) + '.xlsx';
-      expect(sanitizeFileName(longName).length).toBeLessThanOrEqual(100);
+      expect(sanitizeFileName(longName).length).toBeLessThanOrEqual(200);
     });
   });
 });

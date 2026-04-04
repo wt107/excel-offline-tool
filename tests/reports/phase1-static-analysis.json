@@ -1,0 +1,77 @@
+{
+  "phase": "Phase 1: 代码静态分析",
+  "timestamp": "2026-04-04T01:23:07.802Z",
+  "summary": {
+    "total": 13,
+    "passed": 9,
+    "failed": 0,
+    "warnings": 4
+  },
+  "results": [
+    {
+      "name": "XSS防护 - escapeHtml使用",
+      "status": "warn",
+      "detail": "escapeHtml调用11次, innerHTML赋值25次, 未转义24处"
+    },
+    {
+      "name": "文件上传 - 魔术字节验证",
+      "status": "pass",
+      "detail": "存在魔术字节验证"
+    },
+    {
+      "name": "无限循环防护 - MAX_ATTEMPTS",
+      "status": "pass",
+      "detail": "存在最大尝试次数限制"
+    },
+    {
+      "name": "内存泄漏 - Blob URL回收",
+      "status": "pass",
+      "detail": "createObjectURL 3次, revokeObjectURL 3次"
+    },
+    {
+      "name": "逻辑缺陷 - ensureUniqueFileName扩展名处理",
+      "status": "pass",
+      "detail": "扩展名处理逻辑存在"
+    },
+    {
+      "name": "逻辑缺陷 - performColumnSplit防御性处理",
+      "status": "pass",
+      "detail": "存在防御性结果处理"
+    },
+    {
+      "name": "逻辑缺陷 - 来源列插入",
+      "status": "pass",
+      "detail": "来源列插入逻辑存在"
+    },
+    {
+      "name": "逻辑缺陷 - 行映射处理",
+      "status": "pass",
+      "detail": "行映射处理存在"
+    },
+    {
+      "name": "代码质量 - src模块与html同步",
+      "status": "warn",
+      "detail": "13个导出在html中未找到"
+    },
+    {
+      "name": "代码质量 - 函数复杂度",
+      "status": "warn",
+      "detail": "6个函数超过100行: copyWorksheetProperties, initializeApp, generateSplitFiles, performVerticalColumnSplit, performSheetDataMerge, runSelfTest"
+    },
+    {
+      "name": "代码质量 - 错误处理覆盖",
+      "status": "pass",
+      "detail": "19个try-catch块, 42次Toast调用"
+    },
+    {
+      "name": "代码质量 - 全局变量数量",
+      "status": "warn",
+      "detail": "51个全局变量"
+    },
+    {
+      "name": "代码质量 - 未使用变量",
+      "status": "pass",
+      "detail": "1个可能未使用的变量"
+    }
+  ]
+}

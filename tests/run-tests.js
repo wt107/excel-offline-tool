@@ -137,6 +137,11 @@ class SimpleTestRunner {
           throw new Error(`Expected value to be defined but got undefined`);
         }
       },
+      toBeUndefined() {
+        if (actual !== undefined) {
+          throw new Error(`Expected undefined but got ${actual}`);
+        }
+      },
       toBeNull() {
         if (actual !== null) {
           throw new Error(`Expected null but got ${actual}`);
@@ -160,6 +165,28 @@ class SimpleTestRunner {
       toContain(expected) {
         if (!actual.includes(expected)) {
           throw new Error(`Expected ${JSON.stringify(actual)} to contain ${JSON.stringify(expected)}`);
+        }
+      },
+      not: {
+        toContain(expected) {
+          if (actual.includes(expected)) {
+            throw new Error(`Expected ${JSON.stringify(actual)} NOT to contain ${JSON.stringify(expected)}`);
+          }
+        },
+        toBe(expected) {
+          if (actual === expected) {
+            throw new Error(`Expected NOT to be ${expected}`);
+          }
+        },
+        toBeNull() {
+          if (actual === null) {
+            throw new Error(`Expected NOT to be null`);
+          }
+        },
+        toBeUndefined() {
+          if (actual === undefined) {
+            throw new Error(`Expected NOT to be undefined`);
+          }
         }
       },
       toThrow(expected) {

@@ -89,8 +89,8 @@
 <body>
     <div class="container">
         <h1>📊 Excel 离线工具测试报告</h1>
-        <div class="timestamp">运行时间: 2026-04-03T13:25:51.498Z</div>
-        <div class="duration">总耗时: 20ms</div>
+        <div class="timestamp">运行时间: 2026-04-04T02:04:12.067Z</div>
+        <div class="duration">总耗时: 22ms</div>
         
         <div class="summary">
             <div class="summary-card">
@@ -98,11 +98,11 @@
                 <div class="summary-label">总计</div>
             </div>
             <div class="summary-card passed">
-                <div class="summary-value">26</div>
+                <div class="summary-value">34</div>
                 <div class="summary-label">通过</div>
             </div>
             <div class="summary-card failed">
-                <div class="summary-value">8</div>
+                <div class="summary-value">0</div>
                 <div class="summary-label">失败</div>
             </div>
             <div class="summary-card skipped">
@@ -127,25 +127,25 @@
       <tr>
         <td>deepCopyCell</td>
         <td>should return undefined for null input</td>
-        <td style="color: #dc3545">❌ 失败</td>
-        <td>1ms</td>
-        <td>expect(...).toBeUndefined is not a function</td>
+        <td style="color: #28a745">✅ 通过</td>
+        <td>0ms</td>
+        <td>-</td>
       </tr>
     
       <tr>
         <td>deepCopyCell</td>
         <td>should return undefined for undefined input</td>
-        <td style="color: #dc3545">❌ 失败</td>
+        <td style="color: #28a745">✅ 通过</td>
         <td>0ms</td>
-        <td>expect(...).toBeUndefined is not a function</td>
+        <td>-</td>
       </tr>
     
       <tr>
         <td>deepCopyCell</td>
         <td>should deep copy cell object</td>
-        <td style="color: #dc3545">❌ 失败</td>
+        <td style="color: #28a745">✅ 通过</td>
         <td>2ms</td>
-        <td>Cannot read properties of undefined (reading 'toBe')</td>
+        <td>-</td>
       </tr>
     
       <tr>
@@ -160,7 +160,7 @@
         <td>adjustRangeReference</td>
         <td>should return original for invalid format</td>
         <td style="color: #28a745">✅ 通过</td>
-        <td>1ms</td>
+        <td>0ms</td>
         <td>-</td>
       </tr>
     
@@ -168,7 +168,7 @@
         <td>adjustRangeReference</td>
         <td>should adjust range with valid rows</td>
         <td style="color: #28a745">✅ 通过</td>
-        <td>0ms</td>
+        <td>1ms</td>
         <td>-</td>
       </tr>
     
@@ -207,9 +207,9 @@
       <tr>
         <td>WorkbookCache</td>
         <td>should evict LRU when full</td>
-        <td style="color: #dc3545">❌ 失败</td>
-        <td>1ms</td>
-        <td>Cannot read properties of undefined (reading 'toBeNull')</td>
+        <td style="color: #28a745">✅ 通过</td>
+        <td>0ms</td>
+        <td>-</td>
       </tr>
     
       <tr>
@@ -239,24 +239,24 @@
       <tr>
         <td>sanitizeFileName</td>
         <td>should handle duplicates</td>
-        <td style="color: #dc3545">❌ 失败</td>
-        <td>1ms</td>
-        <td>Expected test_01.xlsx but got test.xlsx_01</td>
+        <td style="color: #28a745">✅ 通过</td>
+        <td>2ms</td>
+        <td>-</td>
       </tr>
     
       <tr>
         <td>sanitizeFileName</td>
         <td>should handle multiple duplicates</td>
-        <td style="color: #dc3545">❌ 失败</td>
+        <td style="color: #28a745">✅ 通过</td>
         <td>0ms</td>
-        <td>Expected test_03.xlsx but got test.xlsx_01</td>
+        <td>-</td>
       </tr>
     
       <tr>
         <td>sanitizeFileName</td>
         <td>should truncate long names</td>
         <td style="color: #28a745">✅ 通过</td>
-        <td>0ms</td>
+        <td>1ms</td>
         <td>-</td>
       </tr>
     
@@ -264,7 +264,7 @@
         <td>按工作表拆分流程</td>
         <td>应正确拆分多工作表文件</td>
         <td style="color: #28a745">✅ 通过</td>
-        <td>1ms</td>
+        <td>2ms</td>
         <td>-</td>
       </tr>
     
@@ -288,7 +288,7 @@
         <td>按列拆分（横向）流程</td>
         <td>应按列值正确分组</td>
         <td style="color: #28a745">✅ 通过</td>
-        <td>2ms</td>
+        <td>1ms</td>
         <td>-</td>
       </tr>
     
@@ -296,7 +296,7 @@
         <td>按列拆分（横向）流程</td>
         <td>应将空值归类到[空值]组</td>
         <td style="color: #28a745">✅ 通过</td>
-        <td>1ms</td>
+        <td>0ms</td>
         <td>-</td>
       </tr>
     
@@ -312,7 +312,7 @@
         <td>按列拆分（竖向）流程</td>
         <td>应为每个数据列生成独立文件</td>
         <td style="color: #28a745">✅ 通过</td>
-        <td>0ms</td>
+        <td>1ms</td>
         <td>-</td>
       </tr>
     
@@ -328,7 +328,7 @@
         <td>多文件合并流程</td>
         <td>应合并多个文件的工作表</td>
         <td style="color: #28a745">✅ 通过</td>
-        <td>1ms</td>
+        <td>0ms</td>
         <td>-</td>
       </tr>
     
@@ -336,7 +336,7 @@
         <td>多文件合并流程</td>
         <td>应处理同名工作表</td>
         <td style="color: #28a745">✅ 通过</td>
-        <td>0ms</td>
+        <td>1ms</td>
         <td>-</td>
       </tr>
     
@@ -359,9 +359,9 @@
       <tr>
         <td>工作表数据合并流程</td>
         <td>应保留多行表头</td>
-        <td style="color: #dc3545">❌ 失败</td>
+        <td style="color: #28a745">✅ 通过</td>
         <td>0ms</td>
-        <td>Expected  but got file1.xlsx-Sheet1</td>
+        <td>-</td>
       </tr>
     
       <tr>
@@ -391,9 +391,9 @@
       <tr>
         <td>边界情况处理</td>
         <td>特殊字符文件名应正确处理</td>
-        <td style="color: #dc3545">❌ 失败</td>
+        <td style="color: #28a745">✅ 通过</td>
         <td>0ms</td>
-        <td>Cannot read properties of undefined (reading 'toContain')</td>
+        <td>-</td>
       </tr>
     
             </tbody>

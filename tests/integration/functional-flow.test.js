@@ -216,9 +216,13 @@ function mergeSheetData(files, selectedSheets, headerRows = 1) {
     
     if (firstSheet) {
       baselineHeaders = jsonData.slice(0, headerRows);
-      mergedData = [['来源文件', ...jsonData[0]], ...jsonData.slice(headerRows).map(row => 
+      const headerRowsWithSource = jsonData.slice(0, headerRows).map((row, idx) => 
+        idx === 0 ? ['来源文件', ...row] : ['', ...row]
+      );
+      const dataRowsWithSource = jsonData.slice(headerRows).map(row => 
         [`${file.name}-${sheetName}`, ...row]
-      )];
+      );
+      mergedData = [...headerRowsWithSource, ...dataRowsWithSource];
       firstSheet = false;
     } else {
       // 验证表头一致性
@@ -269,8 +273,8 @@ function jsonToWorksheet(data) {
   const ws = {};
   data.forEach((row, r) => {
     row.forEach((cell, c) => {
-      if (cell !== undefined && cell !== null && cell !== '') {
-        ws[encodeCell(r, c)] = { v: cell, t: typeof cell === 'number' ? 'n' : 's' };
+      if (cell !== undefined && cell !== null) {
+        ws[encodeCell(r, c)] = { v: cell, t: typeof cell === 'string' && cell === '' ? 's' : typeof cell === 'number' ? 'n' : 's' };
       }
     });
   });

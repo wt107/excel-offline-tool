@@ -2223,6 +2223,7 @@
                         selectedCountEl.textContent = `已选择: ${selectedSheets.size} 个工作表`;
                     }
                     document.getElementById('step2Next').disabled = selectedSheets.size === 0;
+                    document.getElementById('step3Next').disabled = selectedSheets.size === 0;
                 } else {
                     document.getElementById('step2Next').disabled = selectedSheetForColumn === null;
                 }
@@ -2478,6 +2479,7 @@
         }
 
         function formatFileSize(bytes) {
+            if (bytes === undefined || bytes === null || isNaN(bytes)) return '0 Bytes';
             if (bytes === 0) return '0 Bytes';
             const k = 1024;
             const sizes = ['Bytes', 'KB', 'MB', 'GB'];
