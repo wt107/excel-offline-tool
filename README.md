@@ -98,9 +98,31 @@ excel-offline-tool/
 
 ## 📦 项目信息
 
-**版本**: v1.0.0  
+**版本**: v1.3.1  
 **状态**: ✅ 已发布  
-**最后更新**: 2026-04-04  
+**最后更新**: 2026-04-14  
+
+---
+
+## 🆕 更新日志
+
+### v1.3.1 (2026-04-14)
+
+**核心改进**:
+- ✨ 新增"复制后删除"策略，更完整的格式保留
+- ✨ 新增 WorkbookCache 缓存系统，减少重复解析
+- ✨ 新增内置自测系统 (53项测试)
+- ✨ 新增内存管理机制
+
+**新增功能**:
+- `copyWorksheetByDeletion()` - 核心删除策略函数
+- `copyWorksheetByColumnDeletion()` - 列删除策略
+- `WorkbookCache` 类 - LRU缓存管理器
+
+**修复问题**:
+- 🐛 修复 XLSX_WRITE_OPTIONS 缺少 cellDates 选项
+- 🐛 修复 copyWorksheetByColumnDeletion 默认参数逻辑
+- 🐛 修复自检函数硬编码选项问题
 
 ---
 
