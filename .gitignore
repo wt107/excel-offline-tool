@@ -1,0 +1,34 @@
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# Logs
+*.log
+
+# Backup
+*.bak
+
+# Dependencies
+node_modules/
+
+# Claude
+.claude/
+
+# Test artifacts
+test/
+fix_cache.bat
+fix_cache.js
+fix_dup.js
+_fix.js
+package.json
+package-lock.json
+SOUL.md
+USER.md
+memory/
