@@ -1181,6 +1181,14 @@
                             <p class="cs-form-hint">可用变量：{original}原文件名 {sheet}工作表名 {index}序号 {date}日期 {time}时间</p>
                         </div>
                         <div class="cs-form-section">
+                            <label class="cs-form-label">处理模式 <span class="cs-form-hint" style="font-weight:400;">（覆盖全局设置）</span></label>
+                            <select id="splitSheetProcessMode" class="cs-form-input" style="max-width:200px;">
+                                <option value="">跟随全局</option>
+                                <option value="full">保留格式</option>
+                                <option value="data">仅数据</option>
+                            </select>
+                        </div>
+                        <div class="cs-form-section">
                             <label class="cs-form-label">输出格式</label>
                             <div class="radio-group" style="display:flex;gap:16px;margin-top:4px;">
                                 <label><input type="radio" name="splitSheetOutputFormat" value="zip" checked> ZIP（多个文件）</label>
@@ -1203,6 +1211,22 @@
                             <label class="cs-form-label">命名模板</label>
                             <input type="text" id="splitColumnNamingTemplate" value="{original}_{value}" aria-label="文件命名模板" class="cs-form-input">
                             <p class="cs-form-hint">可用变量：{original}原文件名 {value}分组值 {index}序号 {date}日期 {time}时间</p>
+                        </div>
+                        <div class="cs-form-section">
+                            <label class="cs-form-label">处理模式 <span class="cs-form-hint" style="font-weight:400;">（覆盖全局设置）</span></label>
+                            <select id="splitColumnProcessMode" class="cs-form-input" style="max-width:200px;">
+                                <option value="">跟随全局</option>
+                                <option value="full">保留格式</option>
+                                <option value="data">仅数据</option>
+                            </select>
+                        </div>
+                        <div class="cs-form-section">
+                            <label class="cs-form-label">输出格式</label>
+                            <div class="radio-group" style="display:flex;gap:16px;margin-top:4px;">
+                                <label><input type="radio" name="splitColumnOutputFormat" value="zip" checked> ZIP（多个文件）</label>
+                                <label><input type="radio" name="splitColumnOutputFormat" value="single"> 单文件（多工作表）</label>
+                            </div>
+                            <p class="cs-form-hint">ZIP模式为每个分组生成独立文件；单文件模式将各分组作为不同工作表合并到同一工作簿</p>
                         </div>
                     </div>
                     <div id="splitColumnVerticalOptions" class="cs-hidden">
@@ -1233,6 +1257,17 @@
                             <input type="text" id="splitVerticalNamingTemplate" value="{original}_{column}" aria-label="文件命名模板" class="cs-form-input">
                             <p class="cs-form-hint">可用变量：{original}原文件名 {column}列头 {index}序号 {date}日期 {time}时间</p>
                         </div>
+                        <div class="cs-form-section">
+                            <label class="cs-form-label">处理模式 <span class="cs-form-hint" style="font-weight:400;">（覆盖全局设置）</span></label>
+                            <select id="splitVerticalProcessMode" class="cs-form-input" style="max-width:200px;">
+                                <option value="">跟随全局</option>
+                                <option value="full">保留格式</option>
+                                <option value="data">仅数据</option>
+                            </select>
+                        </div>
+                        <div class="cs-form-section">
+                            <p class="cs-form-hint" style="color:#6c757d;font-style:italic;">📦 竖向拆分强制使用ZIP打包输出</p>
+                        </div>
                     </div>
                     <div id="splitRowsOptions" class="cs-hidden">
                         <p class="cs-desc-text">按行数拆分：将工作表按指定行数拆分为多个文件</p>
@@ -1250,6 +1285,22 @@
                             <label class="cs-form-label">命名模板</label>
                             <input type="text" id="splitRowsNamingTemplate" value="{original}_{sheet}_{index}" aria-label="文件命名模板" class="cs-form-input">
                             <p class="cs-form-hint">可用变量：{original}原文件名 {sheet}工作表名 {index}序号 {date}日期 {time}时间</p>
+                        </div>
+                        <div class="cs-form-section">
+                            <label class="cs-form-label">处理模式 <span class="cs-form-hint" style="font-weight:400;">（覆盖全局设置）</span></label>
+                            <select id="splitRowsProcessMode" class="cs-form-input" style="max-width:200px;">
+                                <option value="">跟随全局</option>
+                                <option value="full">保留格式</option>
+                                <option value="data">仅数据</option>
+                            </select>
+                        </div>
+                        <div class="cs-form-section">
+                            <label class="cs-form-label">输出格式</label>
+                            <div class="radio-group" style="display:flex;gap:16px;margin-top:4px;">
+                                <label><input type="radio" name="splitRowsOutputFormat" value="zip" checked> ZIP（多个文件）</label>
+                                <label><input type="radio" name="splitRowsOutputFormat" value="single"> 单文件（多工作表）</label>
+                            </div>
+                            <p class="cs-form-hint">ZIP模式为每组生成独立文件；单文件模式将每组作为工作表合并到同一工作簿</p>
                         </div>
                     </div>
                     <div id="mergeFileOptions" class="cs-hidden">
@@ -1554,9 +1605,28 @@
     // #region [SECTION] XLSX 读写选项
     // ═══════════════════════════════════════════════════════════════
     // 【Bug-3 修复】读取选项改为动态函数，根据处理模式决定是否保留格式
+    // 获取生效的处理模式（优先模式级覆盖，其次全局）
+    function getEffectiveProcessingMode(currentMode) {
+        var idMap = {
+            'split-sheet': 'splitSheetProcessMode',
+            'split-column': 'splitColumnProcessMode',
+            'split-column-vertical': 'splitVerticalProcessMode',
+            'split-rows': 'splitRowsProcessMode',
+            'merge-file': null,
+            'merge-sheet': null,
+            'smart-merge': null
+        };
+        var inputId = idMap[currentMode];
+        if (inputId) {
+            var el = document.getElementById(inputId);
+            if (el && el.value) return el.value;
+        }
+        return (typeof AppState !== 'undefined' && AppState.config && AppState.config.processingMode) || 'full';
+    }
+
     function getReadOptions() {
-        var mode = (typeof AppState !== 'undefined' && AppState.config && AppState.config.processingMode) || 'full';
-        var preserve = mode !== 'data-only';
+        var mode = getEffectiveProcessingMode(currentMode);
+        var preserve = mode !== 'data';
         return {
             type: 'array',
             cellStyles: preserve,
@@ -1569,8 +1639,8 @@
 
     // 统一的写入选项（同样动态）
     function getWriteOptions() {
-        var mode = (typeof AppState !== 'undefined' && AppState.config && AppState.config.processingMode) || 'full';
-        var preserve = mode !== 'data-only';
+        var mode = getEffectiveProcessingMode(currentMode);
+        var preserve = mode !== 'data';
         return {
             bookType: 'xlsx',
             type: 'array',
@@ -2935,6 +3005,16 @@
         }
 
         const CELL_COUNT_WARN_THRESHOLD = 2000000;  // 200万单元格预警阈值
+
+        // Sheet名归一化：用于模式B的分组key（不修改原始名）
+        // 只用于分组比较，不影响输出文件名
+        function normalizeSheetNameForGroup(name) {
+            if (!name) return '';
+            return name.trim()
+                .replace(/\u3000/g, ' ')        // 全角空格→半角
+                .replace(/[\s]+/g, ' ')         // 连续空格→单空格
+                .toLowerCase();                  // 大小写不敏感
+        }
 
         function checkCellCountWarning(workbook, warnings) {
             if (!workbook) return;
@@ -4950,13 +5030,10 @@
                     var srpRollbackFiles = generatedFiles;
                     var srpRollbackNames = usedFileNames;
                     try {
-                        const zip = new JSZip();
-                        const usedFileNamesSR = [];
                         var srpPerFile = parseInt(document.getElementById('splitRowsPerFile').value, 10) || 500;
                         var srpHeaderRows = getHeaderRowCount('splitRowsHeaderRows', 1);
                         if (srpPerFile < 1) srpPerFile = 500;
                         var srpSheetNames = Array.from(selectedSheets);
-                        var srpTotalSheets = srpSheetNames.length;
                         var srpTotalRowsAll = 0;
                         for (var srpS = 0; srpS < srpSheetNames.length; srpS++) {
                             srpTotalRowsAll += XLSX.utils.decode_range(workbook.Sheets[srpSheetNames[srpS]]['!ref'] || 'A1').e.r + 1;
@@ -4965,94 +5042,141 @@
                         progressBarFill.style.width = '5%';
                         await new Promise(resolve => setTimeout(resolve, UI_YIELD_DELAY_MEDIUM));
                         
-                        var srpGlobalCount = 0;
-                        for (var srpS = 0; srpS < srpSheetNames.length; srpS++) {
-                            var srpSheetName = srpSheetNames[srpS];
-                            var srpWs = workbook.Sheets[srpSheetName];
-                            if (isWorksheetEffectivelyEmpty(srpWs)) {
-                                skippedEmptySheets++;
-                                continue;
+                        // 检查单文件模式
+                        var srpIsSingleFile = (document.querySelector('input[name="splitRowsOutputFormat"]:checked') || {}).value === 'single';
+                        
+                        if (srpIsSingleFile) {
+                            // 单文件模式：合并所有分块为一个多Sheet工作簿
+                            var srpMasterWb = XLSX.utils.book_new();
+                            var srpFileIdx = 0;
+                            for (var srpS = 0; srpS < srpSheetNames.length; srpS++) {
+                                var srpSheetName = srpSheetNames[srpS];
+                                var srpWs = workbook.Sheets[srpSheetName];
+                                if (isWorksheetEffectivelyEmpty(srpWs)) continue;
+                                var srpJson = XLSX.utils.sheet_to_json(srpWs, { header: 1 });
+                                var srpTotal = srpJson.length;
+                                if (srpTotal <= srpHeaderRows) continue;
+                                var srpHeaders = srpJson.slice(0, srpHeaderRows);
+                                var srpDataRows = srpJson.slice(srpHeaderRows);
+                                var srpChunkCount = Math.ceil(srpDataRows.length / srpPerFile);
+                                
+                                for (var srpC = 0; srpC < srpChunkCount; srpC++) {
+                                    var srpStart = srpC * srpPerFile;
+                                    var srpEnd = Math.min(srpStart + srpPerFile, srpDataRows.length);
+                                    var srpChunkRows = srpHeaders.concat(srpDataRows.slice(srpStart, srpEnd));
+                                    var srpNewWs = XLSX.utils.aoa_to_sheet(srpChunkRows);
+                                    // 复制列宽
+                                    try {
+                                        if (srpWs['!cols']) srpNewWs['!cols'] = JSON.parse(JSON.stringify(srpWs['!cols']));
+                                    } catch(e) {}
+                                    var sheetLabel = srpSheetName.substring(0, 27) + '_' + (srpC + 1);
+                                    XLSX.utils.book_append_sheet(srpMasterWb, srpNewWs, sheetLabel);
+                                    fileCount++;
+                                    progressBarFill.style.width = Math.min(5 + (srpFileIdx / srpTotalRowsAll) * 85, 90) + '%';
+                                    srpFileIdx++;
+                                    await new Promise(resolve => setTimeout(resolve, UI_YIELD_DELAY_SMALL));
+                                }
                             }
-                            var srpJson = XLSX.utils.sheet_to_json(srpWs, { header: 1 });
-                            var srpTotal = srpJson.length;
-                            if (srpTotal <= srpHeaderRows) {
-                                skippedEmptySheets++;
-                                continue;
+                            injectFullCalcOnLoad(srpMasterWb);
+                            var srpMasterBuf = XLSX.write(srpMasterWb, getWriteOptions());
+                            srpMasterBuf = await injectFullCalcOnLoadIntoBuffer(srpMasterBuf);
+                            var srpMasterName = originalFileName + '_按行数拆分.xlsx';
+                            generatedFiles.push({
+                                name: srpMasterName,
+                                displayName: originalFileName + '_按行数拆分',
+                                data: srpMasterBuf
+                            });
+                            totalSize = srpMasterBuf.length;
+                        } else {
+                            // ZIP模式
+                            const zip = new JSZip();
+                            const usedFileNamesSR = [];
+                            var srpGlobalCount = 0;
+                            for (var srpS = 0; srpS < srpSheetNames.length; srpS++) {
+                                var srpSheetName = srpSheetNames[srpS];
+                                var srpWs = workbook.Sheets[srpSheetName];
+                                if (isWorksheetEffectivelyEmpty(srpWs)) {
+                                    skippedEmptySheets++;
+                                    continue;
+                                }
+                                var srpJson = XLSX.utils.sheet_to_json(srpWs, { header: 1 });
+                                var srpTotal = srpJson.length;
+                                if (srpTotal <= srpHeaderRows) {
+                                    skippedEmptySheets++;
+                                    continue;
+                                }
+                                var srpHeaders = srpJson.slice(0, srpHeaderRows);
+                                var srpDataRows = srpJson.slice(srpHeaderRows);
+                                var srpChunkCount = Math.ceil(srpDataRows.length / srpPerFile);
+                                
+                                for (var srpC = 0; srpC < srpChunkCount; srpC++) {
+                                    var srpStart = srpC * srpPerFile;
+                                    var srpEnd = Math.min(srpStart + srpPerFile, srpDataRows.length);
+                                    var srpChunkRows = srpHeaders.concat(srpDataRows.slice(srpStart, srpEnd));
+                                    
+                                    var srpFileName = resolveNamingTemplate(getNamingTemplate('split-rows'), {
+                                        original: originalFileName,
+                                        sheet: srpSheetName,
+                                        index: srpC + 1
+                                    }) + '.xlsx';
+                                    srpFileName = ensureUniqueFileName(srpFileName, usedFileNamesSR);
+                                    usedFileNamesSR.push(srpFileName);
+                                    
+                                    var srpNewWb = XLSX.utils.book_new();
+                                    var srpNewWs = XLSX.utils.aoa_to_sheet(srpChunkRows);
+                                    
+                                    try {
+                                        if (srpWs['!merges']) {
+                                            srpNewWs['!merges'] = srpWs['!merges'].filter(function(m) {
+                                                return m.s.r < srpHeaderRows || m.e.r < srpHeaderRows || 
+                                                       (m.s.r >= srpHeaderRows + srpStart && m.e.r < srpHeaderRows + srpEnd);
+                                            }).map(function(m) {
+                                                var adj = JSON.parse(JSON.stringify(m));
+                                                if (adj.s.r >= srpHeaderRows) adj.s.r -= srpHeaderRows + srpStart - srpHeaderRows;
+                                                if (adj.e.r >= srpHeaderRows) adj.e.r -= srpHeaderRows + srpStart - srpHeaderRows;
+                                                return adj;
+                                            });
+                                        }
+                                    } catch(e) {}
+                                    
+                                    try {
+                                        if (srpWs['!cols']) srpNewWs['!cols'] = JSON.parse(JSON.stringify(srpWs['!cols']));
+                                    } catch(e) {}
+                                    
+                                    XLSX.utils.book_append_sheet(srpNewWb, srpNewWs, srpSheetName);
+                                    
+                                    injectFullCalcOnLoad(srpNewWb);
+                                    var srpBuf = XLSX.write(srpNewWb, getWriteOptions());
+                                    srpBuf = await injectFullCalcOnLoadIntoBuffer(srpBuf);
+                                    zip.file(srpFileName, srpBuf);
+                                    
+                                    generatedFiles.push({
+                                        name: srpFileName,
+                                        displayName: srpFileName.replace(/\.xlsx$/i, ''),
+                                        data: srpBuf
+                                    });
+                                    totalSize += srpBuf.length;
+                                    fileCount++;
+                                    srpGlobalCount++;
+                                    
+                                    var srpPct = 5 + (srpGlobalCount / srpTotalRowsAll) * 85;
+                                    progressBarFill.style.width = Math.min(srpPct, 90) + '%';
+                                    var lt = document.getElementById('loadingText');
+                                    if (lt) lt.textContent = '按行数拆分中 ' + fileCount + ' 个文件...';
+                                    await new Promise(resolve => setTimeout(resolve, UI_YIELD_DELAY_SMALL));
+                                }
                             }
-                            var srpHeaders = srpJson.slice(0, srpHeaderRows);
-                            var srpDataRows = srpJson.slice(srpHeaderRows);
-                            var srpChunkCount = Math.ceil(srpDataRows.length / srpPerFile);
                             
-                            for (var srpC = 0; srpC < srpChunkCount; srpC++) {
-                                var srpStart = srpC * srpPerFile;
-                                var srpEnd = Math.min(srpStart + srpPerFile, srpDataRows.length);
-                                var srpChunkRows = srpHeaders.concat(srpDataRows.slice(srpStart, srpEnd));
-                                
-                                var srpFileName = resolveNamingTemplate(getNamingTemplate('split-rows'), {
-                                    original: originalFileName,
-                                    sheet: srpSheetName,
-                                    index: srpC + 1
-                                }) + '.xlsx';
-                                srpFileName = ensureUniqueFileName(srpFileName, usedFileNamesSR);
-                                usedFileNamesSR.push(srpFileName);
-                                
-                                // 创建新工作簿：先用 aoa_to_sheet 创建数据，再从原工作表复制格式
-                                var srpNewWb = XLSX.utils.book_new();
-                                var srpNewWs = XLSX.utils.aoa_to_sheet(srpChunkRows);
-                                
-                                // 复制合并单元格（只保留在范围内的合并）
-                                try {
-                                    if (srpWs['!merges']) {
-                                        srpNewWs['!merges'] = srpWs['!merges'].filter(function(m) {
-                                            return m.s.r < srpHeaderRows || m.e.r < srpHeaderRows || 
-                                                   (m.s.r >= srpHeaderRows + srpStart && m.e.r < srpHeaderRows + srpEnd);
-                                        }).map(function(m) {
-                                            var adj = JSON.parse(JSON.stringify(m));
-                                            if (adj.s.r >= srpHeaderRows) adj.s.r -= srpHeaderRows + srpStart - srpHeaderRows;
-                                            if (adj.e.r >= srpHeaderRows) adj.e.r -= srpHeaderRows + srpStart - srpHeaderRows;
-                                            return adj;
-                                        });
-                                    }
-                                } catch(e) { /* 合并单元格复制非关键 */ }
-                                
-                                // 复制列宽
-                                try {
-                                    if (srpWs['!cols']) srpNewWs['!cols'] = JSON.parse(JSON.stringify(srpWs['!cols']));
-                                } catch(e) {}
-                                
-                                XLSX.utils.book_append_sheet(srpNewWb, srpNewWs, srpSheetName);
-                                
-                                injectFullCalcOnLoad(srpNewWb);
-                                var srpBuf = XLSX.write(srpNewWb, getWriteOptions());
-                                srpBuf = await injectFullCalcOnLoadIntoBuffer(srpBuf);
-                                zip.file(srpFileName, srpBuf);
-                                
-                                generatedFiles.push({
-                                    name: srpFileName,
-                                    displayName: srpFileName.replace(/\.xlsx$/i, ''),
-                                    data: srpBuf
-                                });
-                                totalSize += srpBuf.length;
-                                fileCount++;
-                                srpGlobalCount++;
-                                
-                                var srpPct = 5 + (srpGlobalCount / srpTotalRowsAll) * 85;
-                                progressBarFill.style.width = Math.min(srpPct, 90) + '%';
-                                var lt = document.getElementById('loadingText');
-                                if (lt) lt.textContent = '按行数拆分中 ' + fileCount + ' 个文件...';
-                                await new Promise(resolve => setTimeout(resolve, UI_YIELD_DELAY_SMALL));
-                            }
+                            loadingText.textContent = '正在打包ZIP文件...';
+                            progressBarFill.style.width = '90%';
+                            await new Promise(resolve => setTimeout(resolve, UI_YIELD_DELAY_MEDIUM));
+                            
+                            zipBlob = await zip.generateAsync({
+                                type: 'blob',
+                                compression: 'DEFLATE',
+                                compressionOptions: { level: 6 }
+                            });
                         }
-                        
-                        loadingText.textContent = '正在打包ZIP文件...';
-                        progressBarFill.style.width = '90%';
-                        await new Promise(resolve => setTimeout(resolve, UI_YIELD_DELAY_MEDIUM));
-                        
-                        zipBlob = await zip.generateAsync({
-                            type: 'blob',
-                            compression: 'DEFLATE',
-                            compressionOptions: { level: 6 }
-                        });
                         
                         if (skippedEmptySheets > 0) {
                             showToast(`已跳过 ${skippedEmptySheets} 个空白/不足行的工作表`, 'info');
@@ -5460,6 +5584,32 @@
             splitReport.fileCount = fileCount;
             splitReport.totalSize = totalSize;
             splitReport.endTime = new Date().toISOString();
+            
+            // 检查单文件模式
+            var isSingleFile = currentMode === 'split-column' && 
+                (document.querySelector('input[name="splitColumnOutputFormat"]:checked') || {}).value === 'single';
+            
+            if (isSingleFile) {
+                // 单文件多Sheet模式：合并所有生成的工作簿为一个多Sheet文件
+                var masterWb = XLSX.utils.book_new();
+                for (var sfi = 0; sfi < generatedFiles.length; sfi++) {
+                    var gf = generatedFiles[sfi];
+                    var gfWb = XLSX.read(gf.data, { type: 'array', cellStyles: true });
+                    var gfFirstSheetName = gfWb.SheetNames[0];
+                    var gfWs = gfWb.Sheets[gfFirstSheetName];
+                    var sheetLabel = gf.displayName.replace(/^.*?_/, '').substring(0, 31) || 'Sheet' + (sfi + 1);
+                    XLSX.utils.book_append_sheet(masterWb, gfWs, sheetLabel);
+                }
+                injectFullCalcOnLoad(masterWb);
+                var masterBuf = XLSX.write(masterWb, getWriteOptions());
+                masterBuf = await injectFullCalcOnLoadIntoBuffer(masterBuf);
+                var masterName = originalFileName + '_按列拆分.xlsx';
+                generatedFiles = [{ name: masterName, displayName: originalFileName + '_按列拆分', data: masterBuf }];
+                zipBlob = null;
+                zipFileName = masterName;
+                return;
+            }
+            
             zipFileName = getSplitZipFileName();
             
             const zip = new JSZip();
@@ -5935,15 +6085,14 @@
                     progressBarFill.style.width = '10%';
                     await new Promise(resolve => setTimeout(resolve, UI_YIELD_DELAY_MEDIUM));
 
-                    // 按Sheet名称分组
+                    // 按Sheet名称分组（归一化后分组，保留原始名输出）
                     var groups = {};
                     for (var smBi = 0; smBi < sortedKeys.length; smBi++) {
                         var bKey = sortedKeys[smBi];
                         var bParsed = parseMergeSelectionKey(bKey);
                         var bWs = uploadedFiles[bParsed.fileIndex].workbook.Sheets[bParsed.sheetName];
                         if (!bWs) continue;
-                        // 归一化Sheet名（trim + 全角空格→半角）
-                        var normName = bParsed.sheetName.trim().replace(/\u3000/g, ' ');
+                        var normName = normalizeSheetNameForGroup(bParsed.sheetName);
                         if (!groups[normName]) groups[normName] = [];
                         groups[normName].push({ fileIndex: bParsed.fileIndex, sheetName: bParsed.sheetName, ws: bWs });
                     }
