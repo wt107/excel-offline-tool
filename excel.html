@@ -1007,7 +1007,18 @@
             }
 
             .mode-selector {
-                flex-direction: column;
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 6px;
+                padding: 8px;
+            }
+
+            .mode-btn {
+                font-size: 0.8em;
+                padding: 6px 4px;
+                white-space: normal;
+                text-align: center;
+                min-height: 44px;
             }
         }
         /* #endregion */
@@ -1367,8 +1378,8 @@
                         <div class="cs-form-section">
                             <label class="cs-form-label">合并模式</label>
                             <div class="radio-group" style="display:flex;gap:16px;margin-top:4px;">
-                                <label><input type="radio" name="smartMergeMode" value="modeA" checked onchange="onSmartMergeModeChange()"> 模式A：全量纵向追加</label>
-                                <label><input type="radio" name="smartMergeMode" value="modeB" onchange="onSmartMergeModeChange()"> 模式B：按名称归类</label>
+                                <label><input type="radio" name="smartMergeMode" value="modeA" checked> 模式A：全量纵向追加</label>
+                                <label><input type="radio" name="smartMergeMode" value="modeB"> 模式B：按名称归类</label>
                             </div>
                             <p class="cs-form-hint">模式A将所选工作表数据依次追加到同一张输出表；模式B按工作表名称归类合并，同名Sheet合并到同一张输出表</p>
                         </div>
@@ -1734,7 +1745,9 @@
             'split-rows': 'splitRowsProcessMode',
             'merge-file': null,
             'merge-sheet': null,
-            'smart-merge': null
+            'smart-merge': null,
+            'summary-merge': null,
+            'data-join': null
         };
         var inputId = idMap[currentMode];
         if (inputId) {
@@ -2978,6 +2991,12 @@
             workbook = null;
             selectedSheets = new Set();
             generatedFiles.length = 0;
+            splitReport = null;
+            selectedSheetForColumn = null;
+            originalFileType = 'xlsx';
+            isXlsFile = false;
+            lastMergeStatistics = null;
+            lastSkippedSheets = [];
             originalFileName = '';
             zipBlob = null;
             uploadedFiles.length = 0;
@@ -3025,6 +3044,12 @@
             }
             
             resetTool();
+
+            // 【BUGFIX】绑定 smartMergeMode 模式切换事件（替代 HTML onchange）
+            document.querySelectorAll('input[name="smartMergeMode"]').forEach(function(el) {
+                el.removeEventListener('change', onSmartMergeModeChange);
+                el.addEventListener('change', onSmartMergeModeChange);
+            });
         }
 
         function getHeaderRowCount(inputId, fallback = 1) {
@@ -5364,6 +5389,7 @@
                         var srpHeaderRows = getHeaderRowCount('splitRowsHeaderRows', 1);
                         if (srpPerFile < 1) srpPerFile = 500;
                         var srpSheetNames = Array.from(selectedSheets);
+                        var srpEffectiveMode = getEffectiveProcessingMode(currentMode);
                         var srpTotalRowsAll = 0;
                         for (var srpS = 0; srpS < srpSheetNames.length; srpS++) {
                             srpTotalRowsAll += XLSX.utils.decode_range(workbook.Sheets[srpSheetNames[srpS]]['!ref'] || 'A1').e.r + 1;
@@ -5394,7 +5420,16 @@
                                     var srpStart = srpC * srpPerFile;
                                     var srpEnd = Math.min(srpStart + srpPerFile, srpDataRows.length);
                                     var srpChunkRows = srpHeaders.concat(srpDataRows.slice(srpStart, srpEnd));
-                                    var srpNewWs = XLSX.utils.aoa_to_sheet(srpChunkRows);
+                                    var srpNewWs;
+                                    if (srpEffectiveMode === 'full') {
+                                        // 保留格式：使用 copyWorksheetByDeletion 保留单元格样式
+                                        var keepRows = [];
+                                        for (var hi = 0; hi < srpHeaderRows; hi++) keepRows.push(hi);
+                                        for (var di = srpStart + srpHeaderRows; di < srpEnd + srpHeaderRows; di++) keepRows.push(di);
+                                        srpNewWs = await copyWorksheetByDeletion(srpWs, keepRows, undefined, undefined);
+                                    } else {
+                                        srpNewWs = XLSX.utils.aoa_to_sheet(srpChunkRows);
+                                    }
                                     // 复制列宽
                                     try {
                                         if (srpWs['!cols']) srpNewWs['!cols'] = JSON.parse(JSON.stringify(srpWs['!cols']));
@@ -5453,7 +5488,16 @@
                                     usedFileNamesSR.push(srpFileName);
                                     
                                     var srpNewWb = XLSX.utils.book_new();
-                                    var srpNewWs = XLSX.utils.aoa_to_sheet(srpChunkRows);
+                                    var srpNewWs;
+                                    if (srpEffectiveMode === 'full') {
+                                        // 保留格式：使用 copyWorksheetByDeletion 保留单元格样式
+                                        var keepRows = [];
+                                        for (var hi = 0; hi < srpHeaderRows; hi++) keepRows.push(hi);
+                                        for (var di = srpStart + srpHeaderRows; di < srpEnd + srpHeaderRows; di++) keepRows.push(di);
+                                        srpNewWs = await copyWorksheetByDeletion(srpWs, keepRows, undefined, undefined);
+                                    } else {
+                                        srpNewWs = XLSX.utils.aoa_to_sheet(srpChunkRows);
+                                    }
                                     
                                     try {
                                         if (srpWs['!merges']) {
@@ -5462,7 +5506,7 @@
                                                        (m.s.r >= srpHeaderRows + srpStart && m.e.r < srpHeaderRows + srpEnd);
                                             }).map(function(m) {
                                                 var adj = JSON.parse(JSON.stringify(m));
-                                                if (adj.s.r >= srpHeaderRows) adj.s.r -= srpHeaderRows + srpStart - srpHeaderRows;
+                                                if (adj.s.r >= srpHeaderRows) adj.s.r -= srpStart;
                                                 if (adj.e.r >= srpHeaderRows) adj.e.r -= srpHeaderRows + srpStart - srpHeaderRows;
                                                 return adj;
                                             });
@@ -6676,7 +6720,7 @@
                                 var gSrc2 = gFile.name + '-' + gItem.sheetName;
                                 var gStartRow = gNextRow;
 
-                                gDataRows.forEach(function(rowItem, localIdx) {
+                                await processWithYieldingAsync(gDataRows, function(rowItem, localIdx) {
                                     var rowArr = rowItem || [];
                                     var absRow = gStartRow + localIdx;
                                     for (var c = 0; c < gMaxCols; c++) {
@@ -6691,7 +6735,7 @@
                                     if (addSourceColumn) {
                                         gMerged[XLSX.utils.encode_cell({ r: absRow, c: gSrcCol })] = { t: 's', v: gSrc2 };
                                     }
-                                });
+                                }, null, { chunkSize: CHUNK_SIZE_ROW });
 
                                 gNextRow = gStartRow + gDataRows.length;
                                 gMerged['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: gNextRow - 1, c: gSrcCol > 0 ? gSrcCol : gMaxCols - 1 } });
@@ -6702,8 +6746,9 @@
                         }
 
                         if (gMerged) {
-                            // Sheet名超31字符截断
-                            var finalName = gName.length > 28 ? gName.substring(0, 28) + '...' : gName;
+                            // Sheet名超31字符截断，并使用 getUniqueSheetName 保证唯一性（防止归一化重名）
+                            var safeName = gName.length > 28 ? gName.substring(0, 28) + '...' : gName;
+                            var finalName = getUniqueSheetName(smBwb.SheetNames, safeName, smBg);
                             XLSX.utils.book_append_sheet(smBwb, gMerged, finalName);
                         }
                     }
@@ -7215,7 +7260,38 @@
                     }
                 }
 
-                if (resultRows.length === 0) throw new Error('没有匹配的数据行');
+                if (resultRows.length === 0) {
+                    // 空匹配是合法结果，输出仅含表头的空文件（用户可确认确实无匹配）
+                    var emptyWs = XLSX.utils.aoa_to_sheet([resultHeader]);
+                    if (resultHeader.length > 0) emptyWs['!cols'] = resultHeader.map(function() { return { wch: 14 }; });
+                    var emptyWb = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(emptyWb, emptyWs, '数据匹配结果');
+                    injectFullCalcOnLoad(emptyWb);
+                    var emptyBuf = XLSX.write(emptyWb, getWriteOptions());
+                    emptyBuf = await injectFullCalcOnLoadIntoBuffer(emptyBuf);
+                    mergedFileBlob = new Blob([emptyBuf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                    mergedFileName = getMergeOutputFileName();
+                    lastMergeStatistics = {
+                        sourceFileCount: uploadedFiles.length,
+                        totalSheets: 2,
+                        mergedRows: 0,
+                        note: joinType + ' join (0 matched)'
+                    };
+                    lastSkippedSheets = [];
+                    loadingText.textContent = '完成！（0 行匹配）';
+                    progressBarFill.style.width = '100%';
+                    await new Promise(function(resolve) { setTimeout(resolve, UI_YIELD_DELAY_LARGE); });
+                    loading.style.display = 'none';
+                    document.getElementById('totalFiles').textContent = '1';
+                    document.getElementById('totalSize').textContent = formatFileSize(mergedFileBlob.size);
+                    csShow(document.getElementById('resultSummary'));
+                    csShow(document.getElementById('downloadBtn'), 'cs-inline-flex');
+                    if (lastMergeStatistics) showMergeStatistics(lastMergeStatistics);
+                    showSkippedSheetsInfo(lastSkippedSheets);
+                    isProcessing = false;
+                    showToast('数据匹配成功（0 行匹配）', 'success');
+                    return;
+                }
 
                 // 构建输出
                 const outputData = [resultHeader, ...resultRows];
@@ -7393,7 +7469,7 @@
             else fail('T03.5 WorkbookCache 类已定义', 'WorkbookCache 未定义');
 
             // T04: 5种模式 DOM 按钮存在
-            const modes = ['split-sheet', 'split-column', 'split-column-vertical', 'merge-file', 'merge-sheet'];
+            const modes = ['split-sheet', 'split-column', 'split-column-vertical', 'split-rows', 'merge-file', 'merge-sheet', 'smart-merge', 'summary-merge', 'data-join'];
             modes.forEach(m => {
                 const btn = document.querySelector(`[data-mode="${m}"]`);
                 if (btn) pass('T04 模式按钮: ' + m);
