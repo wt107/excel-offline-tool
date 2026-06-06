@@ -33,3 +33,6 @@ test/blob-report/
 SOUL.md
 USER.md
 test/tmp-downloads/
+reports/
+test/
+*.zip
