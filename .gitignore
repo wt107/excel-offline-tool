@@ -38,3 +38,4 @@ test/
 *.zip
 package.json
 package-lock.json
+DESIGN.md
