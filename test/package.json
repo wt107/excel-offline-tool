@@ -1,0 +1,27 @@
+{
+  "name": "excel-offline-tool-test",
+  "version": "1.4.0",
+  "description": "Excel离线浏览器工具 - 自动化测试套件",
+  "private": true,
+  "scripts": {
+    "setup": "npm install && npx playwright install chromium",
+    "generate": "node scripts/generate-test-data.js",
+    "test": "npx playwright test",
+    "test:headed": "npx playwright test --headed",
+    "test:ui": "npx playwright test --ui",
+    "test:selftest": "npx playwright test 00-selftest",
+    "test:split-sheet": "npx playwright test 01-split-sheet",
+    "test:split-column": "npx playwright test 02-split-column",
+    "test:split-vertical": "npx playwright test 03-split-vertical",
+    "test:merge-file": "npx playwright test 04-merge-file",
+    "test:merge-sheet": "npx playwright test 05-merge-sheet",
+    "test:large-file": "npx playwright test 06-large-file",
+    "test:formula": "npx playwright test 07-formula",
+    "report": "npx playwright show-report",
+    "clean": "node scripts/clean.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.40.0",
+    "xlsx": "^0.18.5"
+  }
+}

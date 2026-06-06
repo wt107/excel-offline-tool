@@ -18,17 +18,18 @@ Thumbs.db
 # Dependencies
 node_modules/
 
-# Claude
+# AI tool directories
 .claude/
+.omo/
+memory/
 
 # Test artifacts
-test/
-fix_cache.bat
-fix_cache.js
-fix_dup.js
-_fix.js
-package.json
-package-lock.json
+test/test-downloads/
+test/test-results/
+test/playwright-report/
+test/blob-report/
+
+# Empty AI metadata files
 SOUL.md
 USER.md
-memory/
+test/tmp-downloads/
