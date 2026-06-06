@@ -36,3 +36,5 @@ test/tmp-downloads/
 reports/
 test/
 *.zip
+package.json
+package-lock.json
