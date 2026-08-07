@@ -8,6 +8,12 @@
     <title>Excel文件处理工具 v1.5.3</title>
     <!-- 内网离线环境：不依赖外网字体，使用系统字体 -->
 
+    <!-- ES5嗅探：老浏览器缺少必要API时置标志，由 initializeApp 显示提示并中止 -->
+    <script nonce="excel-offline-2026">
+    if (typeof Promise === 'undefined' || typeof Map === 'undefined' || !window.FileReader) {
+        window.__browserTooOld = true;
+    }
+    </script>
     <script src="lib/xlsx.full.min.js"></script>
     <script src="lib/jszip.min.js"></script>
     <style nonce="excel-offline-2026">
@@ -1100,6 +1106,7 @@
             <button class="mode-btn" data-mode="summary-merge" role="tab" aria-selected="false" aria-label="合并计算">📊 合并计算</button>
             <button class="mode-btn" data-mode="data-join" role="tab" aria-selected="false" aria-label="数据匹配">🔗 数据匹配</button>
         </div>
+        <p class="cs-desc-text" id="modeDesc" style="text-align:center;margin-bottom:12px;font-size:0.9em;">把每个工作表导出为独立文件</p>
 
         <div class="progress-bar" id="progressBar">
             <div class="step active" data-step="1">
@@ -1426,7 +1433,13 @@
                         </div>
                         <div class="separator-option">
                             <label>来源列</label>
-                            <p class="cs-form-hint">系统会自动添加来源列，格式为 文件名-工作表名</p>
+                            <label class="cs-check-label"><input type="checkbox" id="mergeSourceColEnabled" checked> 在结果中添加来源列（格式：文件名-工作表名）</label>
+                            <label class="cs-check-label"><input type="radio" name="mergeSourceColPos" id="mergeSourceColPosFirst" value="first" checked> 来源列放在第一列</label>
+                            <label class="cs-check-label"><input type="radio" name="mergeSourceColPos" id="mergeSourceColPosLast" value="last"> 来源列放在最后一列</label>
+                        </div>
+                        <div class="separator-option">
+                            <label>输出格式</label>
+                            <label class="cs-check-label"><input type="checkbox" id="mergeDataOnly"> 仅保留数据（去除原表格式）</label>
                         </div>
 
                         <p class="cs-desc-text">选择要合并的工作表，数据将按选择顺序依次合并到新工作表中</p>
@@ -1669,6 +1682,7 @@
     const MAX_FILE_COUNT = 50;                          // 最大文件数量
     const MAX_SHEET_COUNT = 200;                        // 最大工作表数量
     const HARD_LIMIT_FILE_BYTES = 50 * 1024 * 1024;    // 硬性大小限制 50MB
+    const MAX_UNZIPPED_BYTES = 500 * 1024 * 1024;      // 解压后总大小上限 500MB（解压炸弹防护）
     const REVOKE_URL_DELAY = 30000;                     // ObjectURL释放延迟 30秒
     const MERGE_KEY_SEPARATOR = '::';                   // 合并选择键分隔符
     const MAX_UNIQUE_SPLIT_VALUES = 500;                // 按列拆分唯一值上限
@@ -1829,6 +1843,8 @@
             }
         }
 
+        let crossSheetFormulaWarned = false;   // 跨表公式警告只提示一次
+
         async function injectFullCalcOnLoadIntoBuffer(excelBuffer) {
             try {
                 var zip = await JSZip.loadAsync(excelBuffer);
@@ -1849,6 +1865,50 @@
                 console.warn('[injectFullCalcOnLoadIntoBuffer] 注入失败:', e);
                 return excelBuffer;
             }
+        }
+
+        /**
+         * 检测工作簿中是否存在跨表公式（如 =其他表!A1）
+         * 拆分/合并输出中跨表引用已断链，强制重算会把缓存值算成 #REF!
+         * @param {Object} wb - 工作簿对象
+         * @returns {boolean} 是否含跨表公式
+         */
+        function workbookHasCrossSheetFormulas(wb) {
+            try {
+                if (!wb || !Array.isArray(wb.SheetNames)) return false;
+                for (var i = 0; i < wb.SheetNames.length; i++) {
+                    var ws = wb.Sheets[wb.SheetNames[i]];
+                    if (!ws) continue;
+                    for (var addr in ws) {
+                        if (addr.charAt(0) === '!') continue;
+                        if (!Object.prototype.hasOwnProperty.call(ws, addr)) continue;
+                        var cell = ws[addr];
+                        if (cell && typeof cell.f === 'string' && cell.f.indexOf('!') !== -1) {
+                            return true;
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn('[workbookHasCrossSheetFormulas] 检测失败:', e);
+            }
+            return false;
+        }
+
+        function warnCrossSheetFormulasOnce() {
+            if (crossSheetFormulaWarned) return;
+            crossSheetFormulaWarned = true;
+            showToast('检测到跨表公式，已保留原计算值，请在 Excel 中检查公式', 'warning');
+        }
+
+        /**
+         * 带跨表公式守卫的 calcPr 注入：有跨表公式则跳过注入并提示
+         */
+        async function injectFullCalcOnLoadIntoBufferGuarded(excelBuffer, wb) {
+            if (workbookHasCrossSheetFormulas(wb)) {
+                warnCrossSheetFormulasOnce();
+                return excelBuffer;
+            }
+            return await injectFullCalcOnLoadIntoBuffer(excelBuffer);
         }
     // #endregion
         // ═══════════════════════════════════════════════════════════════
@@ -1983,6 +2043,155 @@
                 const colNum = XLSX.utils.decode_col(colStr);
                 if (colNum < 0 || colNum > 16383) return match;
                 return d1 + XLSX.utils.encode_col(colNum + colOffset) + d2 + rowStr;
+            });
+        }
+
+        /**
+         * 将工作表数据区整体右移 offset 列（merge-sheet"来源列放首列"时数据列右移）
+         * 单元格、公式引用、合并单元格、列宽、自动筛选、数据验证、条件格式同步偏移
+         * @param {Object} ws - 工作表对象（就地修改）
+         * @param {number} offset - 右移列数
+         */
+        function shiftWorksheetColumnsRight(ws, offset) {
+            if (!ws || !offset) return;
+            var range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+            // 先收集后移动，避免遍历中增删键
+            var moves = [];
+            for (var key in ws) {
+                if (!ws.hasOwnProperty(key) || key.charAt(0) === '!') continue;
+                var addr;
+                try { addr = XLSX.utils.decode_cell(key); } catch (e) { continue; }
+                if (addr.c >= range.s.c) {
+                    moves.push({ from: key, to: XLSX.utils.encode_cell({ r: addr.r, c: addr.c + offset }) });
+                }
+            }
+            // 先快照再整体搬移：就地右移若边读边写，后处理的单元格会读到刚被覆盖的值（级联覆盖）
+            var cells = [];
+            for (var mi = 0; mi < moves.length; mi++) cells.push(ws[moves[mi].from]);
+            for (var mi = 0; mi < moves.length; mi++) delete ws[moves[mi].from];
+            for (var mi = 0; mi < moves.length; mi++) {
+                var cell = cells[mi];
+                if (cell && cell.f) cell.f = shiftFormulaRefs(cell.f, offset);
+                ws[moves[mi].to] = cell;
+            }
+            if (ws['!merges']) {
+                ws['!merges'].forEach(function(m) {
+                    if (m.s.c >= range.s.c) { m.s.c += offset; m.e.c += offset; }
+                });
+            }
+            if (ws['!cols']) {
+                for (var ci = 0; ci < offset; ci++) ws['!cols'].splice(range.s.c, 0, undefined);
+            }
+            // 范围字符串类属性复用公式偏移逻辑（A1:B2 → B1:C2）
+            if (ws['!autofilter'] && ws['!autofilter'].ref) {
+                ws['!autofilter'].ref = shiftFormulaRefs(ws['!autofilter'].ref, offset);
+            }
+            if (ws['!dataValidation']) {
+                ws['!dataValidation'].forEach(function(dv) {
+                    if (dv.sqref) dv.sqref = shiftFormulaRefs(dv.sqref, offset);
+                });
+            }
+            if (ws['!conditionalFormatting']) {
+                ws['!conditionalFormatting'].forEach(function(cf) {
+                    if (cf.ref) cf.ref = shiftFormulaRefs(cf.ref, offset);
+                });
+            }
+            ws['!ref'] = XLSX.utils.encode_range({
+                s: range.s,
+                e: { r: range.e.r, c: range.e.c + offset }
+            });
+        }
+
+        /**
+         * 将工作表整体平移到 A1 起始（用于非 A1 起始 !ref 的归一化）
+         * 单元格地址、合并单元格、超链接、列宽、自动筛选、数据验证、条件格式同步偏移；
+         * 若目标已有单元格（理论不会发生，因为调用方刚 clone），平移前先清理
+         * @param {Object} ws - 工作表对象（就地修改）
+         * @param {number} rowOffset - 起始行号（0-based，>0 需上移）
+         * @param {number} colOffset - 起始列号（0-based，>0 需左移）
+         */
+        function normalizeWorksheetToA1(ws, rowOffset, colOffset) {
+            if (!ws || (rowOffset === 0 && colOffset === 0)) return;
+            // 先收集所有单元格地址（含非 A1 起始），快照后整体搬移，避免级联覆盖
+            var cells = [];
+            for (var key in ws) {
+                if (!ws.hasOwnProperty(key) || key.charAt(0) === '!') continue;
+                var addr;
+                try { addr = XLSX.utils.decode_cell(key); } catch (e) { continue; }
+                if (addr.r >= rowOffset && addr.c >= colOffset) {
+                    cells.push({ from: key, to: XLSX.utils.encode_cell({ r: addr.r - rowOffset, c: addr.c - colOffset }), cell: ws[key] });
+                }
+            }
+            for (var ci = 0; ci < cells.length; ci++) delete ws[cells[ci].from];
+            for (var ci2 = 0; ci2 < cells.length; ci2++) ws[cells[ci2].to] = cells[ci2].cell;
+
+            // 合并单元格偏移
+            if (ws['!merges']) {
+                ws['!merges'].forEach(function(m) {
+                    m.s.r -= rowOffset; m.s.c -= colOffset;
+                    m.e.r -= rowOffset; m.e.c -= colOffset;
+                });
+            }
+            // 超链接偏移（地址字符串 A1:B2 形式）
+            function shiftRangeRef(ref) {
+                if (!ref || typeof ref !== 'string') return ref;
+                var m;
+                try {
+                    m = XLSX.utils.decode_range(ref);
+                    var shifted = XLSX.utils.encode_range({
+                        s: { r: m.s.r - rowOffset, c: m.s.c - colOffset },
+                        e: { r: m.e.r - rowOffset, c: m.e.c - colOffset }
+                    });
+                    // 平移后越界（<0）说明元数据指向数据区之外，丢弃
+                    return (m.s.r - rowOffset < 0 || m.s.c - colOffset < 0) ? null : shifted;
+                } catch (e2) { return ref; }
+            }
+            if (ws['!hyperlinks']) {
+                var shiftedLinks = [];
+                ws['!hyperlinks'].forEach(function(hl) {
+                    var nr = shiftRangeRef(hl.ranges || hl.ref);
+                    if (!nr) return;
+                    var copy = JSON.parse(JSON.stringify(hl));
+                    delete copy.ranges; delete copy.ref;
+                    if (hl.ranges) copy.ranges = [nr]; else copy.ref = nr;
+                    shiftedLinks.push(copy);
+                });
+                ws['!hyperlinks'] = shiftedLinks;
+            }
+            if (ws['!cols']) {
+                for (var cj = 0; cj < colOffset; cj++) ws['!cols'].splice(0, 1);
+            }
+            if (ws['!rows']) {
+                for (var rj = 0; rj < rowOffset; rj++) ws['!rows'].splice(0, 1);
+            }
+            if (ws['!autofilter'] && ws['!autofilter'].ref) {
+                ws['!autofilter'].ref = shiftRangeRef(ws['!autofilter'].ref) || ws['!autofilter'].ref;
+            }
+            if (ws['!dataValidation']) {
+                var keptDv = [];
+                ws['!dataValidation'].forEach(function(dv) {
+                    var nr = dv.sqref ? shiftRangeRef(dv.sqref) : null;
+                    if (!nr) return;
+                    dv.sqref = nr;
+                    keptDv.push(dv);
+                });
+                ws['!dataValidation'] = keptDv;
+            }
+            if (ws['!conditionalFormatting']) {
+                var keptCf = [];
+                ws['!conditionalFormatting'].forEach(function(cf) {
+                    var nr = cf.ref ? shiftRangeRef(cf.ref) : null;
+                    if (!nr) return;
+                    cf.ref = nr;
+                    keptCf.push(cf);
+                });
+                ws['!conditionalFormatting'] = keptCf;
+            }
+            // 重写 !ref 到 A1 起始
+            var range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+            ws['!ref'] = XLSX.utils.encode_range({
+                s: { r: 0, c: 0 },
+                e: { r: range.e.r - rowOffset, c: range.e.c - colOffset }
             });
         }
 
@@ -3010,10 +3219,38 @@
             verticalKeyColumns = [];
             selectedVerticalColumns = [];
             document.getElementById('fileInput').value = '';
+            // 重置 merge-sheet 来源列/输出格式选项
+            const msce = document.getElementById('mergeSourceColEnabled');
+            if (msce) msce.checked = true;
+            const mscpf = document.getElementById('mergeSourceColPosFirst');
+            if (mscpf) mscpf.checked = true;
+            const mdo = document.getElementById('mergeDataOnly');
+            if (mdo) mdo.checked = false;
             goToStep(1);
         }
 
+        // B12修复：各模式的一句话说明，显示在模式选择栏下方
+        const MODE_DESCRIPTIONS = {
+            'split-sheet': '把每个工作表导出为独立文件',
+            'split-column': '按某列的不同取值，把行分到多个文件',
+            'split-column-vertical': '把不同的列拆到多个文件',
+            'split-rows': '按行数拆分',
+            'merge-file': '多个文件合并为一个工作簿（每个来源一个工作表）',
+            'merge-sheet': '多个工作表的数据合并到一张总表',
+            'smart-merge': '智能合并大师',
+            'summary-merge': '合并计算',
+            'data-join': '数据匹配'
+        };
+
         function switchMode(mode) {
+            // B6修复：有已上传文件/已生成结果/已加载workbook时，切换前需确认（切换会清空数据）
+            const hasPendingData = workbook !== null || uploadedFiles.length > 0 || generatedFiles.length > 0;
+            if (mode !== currentMode && hasPendingData) {
+                if (!confirm('切换模式将清除当前已上传的文件和结果，继续吗？')) {
+                    // 取消：不切换。此处尚未改动任何UI，mode按钮active状态自然保持
+                    return;
+                }
+            }
             currentMode = mode;
             document.querySelectorAll('.mode-btn').forEach(btn => {
                 btn.classList.remove('active');
@@ -3023,6 +3260,10 @@
                     btn.setAttribute('aria-selected', 'true');
                 }
             });
+
+            // B12修复：更新模式说明文案
+            const modeDescEl = document.getElementById('modeDesc');
+            if (modeDescEl) modeDescEl.textContent = MODE_DESCRIPTIONS[mode] || '';
 
             const step3Indicator = document.getElementById('step3Indicator');
             csShow(step3Indicator, 'cs-flex');
@@ -3056,11 +3297,16 @@
             const inputEl = document.getElementById(inputId);
             if (!inputEl) return fallback; // 【Defect-7 修复】元素不存在时返回 fallback
             const rawValue = Number.parseInt(inputEl.value, 10);
-            if (Number.isNaN(rawValue)) return fallback;
-            if (rawValue <= 0) {
-                showToast('表头行数不能小于1，已自动设为1', 'warning');
+            if (Number.isNaN(rawValue)) {
+                showToast('表头行数无效，已自动设为' + fallback, 'warning');
                 return fallback;
             }
+            if (rawValue < 0) {
+                showToast('表头行数不能为负数，已自动设为1', 'warning');
+                return 1;
+            }
+            // 0 是合法值：表示无表头（merge-sheet 的 headerRows 支持 0）
+            if (rawValue === 0) return 0;
             if (rawValue > 1000) {
                 showToast('表头行数过大(' + rawValue + ')，已自动限制为1000', 'warning');
                 return 1000;
@@ -3310,8 +3556,14 @@
                 throw new Error(`无效的工作表选择键: ${key}`);
             }
 
+            // parseInt 得 NaN（键损坏）时返回 null，由调用处跳过
+            var parsedFileIndex = Number.parseInt(key.slice(0, separatorIndex), 10);
+            if (Number.isNaN(parsedFileIndex)) {
+                return null;
+            }
+
             return {
-                fileIndex: Number.parseInt(key.slice(0, separatorIndex), 10),
+                fileIndex: parsedFileIndex,
                 sheetName: decodeURIComponent(key.slice(separatorIndex + MERGE_KEY_SEPARATOR.length))
             };
         }
@@ -3495,20 +3747,11 @@
             const baselineHeaders = baselineRows.slice(0, headerRows);
             const currentHeaders = currentRows.slice(0, headerRows);
 
-            // 检查列数
+            // 【BUGFIX-扩展列】只比较重叠列：列数不同但重叠列表头一致时，允许"合并+扩列"。
+            // 列数本身就是"多的列自动扩展、少的补空"，不再作为跳过理由（后续文件列数可少于基准表）。
             const baselineMaxCol = getMaxColumnCount(baselineHeaders);
             const currentMaxCol = getMaxColumnCount(currentHeaders);
-
-            // Phase 1.1: 放宽列数验证，允许后续文件有更多列
-            // 参考 WPS Power Query 追加查询逻辑：缺失列自动补空
-            if (currentMaxCol < baselineMaxCol) {
-                return {
-                    valid: false,
-                    reason: `列数不足：基准表有 ${baselineMaxCol} 列，当前表只有 ${currentMaxCol} 列，后续文件列数不能少于基准表`,
-                    details: []
-                };
-            }
-            // currentMaxCol > baselineMaxCol 时通过验证，额外列自动保留
+            const compareCols = Math.min(baselineMaxCol, currentMaxCol);
 
             // 逐行逐列检查表头内容
             const details = [];
@@ -3516,7 +3759,7 @@
                 const baselineRow = baselineHeaders[rowIdx] || [];
                 const currentRow = currentHeaders[rowIdx] || [];
 
-                for (let colIdx = 0; colIdx < baselineMaxCol; colIdx++) {
+                for (let colIdx = 0; colIdx < compareCols; colIdx++) {
                     const baselineValue = baselineRow[colIdx];
                     const currentValue = currentRow[colIdx];
 
@@ -3615,6 +3858,48 @@
             });
         }
 
+        /**
+         * 解压炸弹防护：xlsx 是 zip，累加各条目解压后大小，超阈值视为无效文件
+         * @param {Uint8Array} data - 文件二进制数据
+         * @returns {Promise<boolean>} 是否安全
+         */
+        async function isZipContentSafe(data) {
+            // xls (OLE2) 不是 zip，跳过检查
+            if (!(data && data.length > 1 && data[0] === 0x50 && data[1] === 0x4B)) return true;
+            try {
+                // 性能说明：JSZip.loadAsync 为惰性解析，只读取 zip 中央目录（条目名、大小等元数据），
+                // 不会全量解压条目内容；下方仅累加目录中的 uncompressedSize。
+                // 因此 200+ 文件逐个检查也只是 200 次目录遍历，无全量解压开销，无需额外优化。
+                var zip = await JSZip.loadAsync(data);
+                var total = 0;
+                for (var entryName in zip.files) {
+                    if (!Object.prototype.hasOwnProperty.call(zip.files, entryName)) continue;
+                    var entry = zip.files[entryName];
+                    // 防御字段缺失
+                    var size = entry && entry._data && typeof entry._data.uncompressedSize === 'number'
+                        ? entry._data.uncompressedSize : 0;
+                    total += size;
+                    if (total > MAX_UNZIPPED_BYTES) return false;
+                }
+                return true;
+            } catch (e) {
+                console.warn('[isZipContentSafe] 解压检查失败:', e);
+                return false; // 无法解压 → 视为无效文件
+            }
+        }
+
+        /**
+         * B3修复：把底层解析错误翻译成用户可读的中文提示。
+         * 英文原文只进 console.error，不进 toast。
+         */
+        function getFriendlyParseErrorMessage(error) {
+            const rawMessage = error && error.message ? String(error.message) : '';
+            if (/encrypt|password|protect|unsupported/i.test(rawMessage)) {
+                return '该文件受密码保护或已加密，请先在 Excel 中打开并解除保护（文件→信息→保护工作簿）后再试';
+            }
+            return '文件解析失败，文件可能已损坏或格式不受支持，请检查文件后重试';
+        }
+
         async function handleSplitFile(file) {
             try {
                 const fileName = file.name.toLowerCase();
@@ -3631,7 +3916,8 @@
                 // 验证文件魔术字节
                 const isValidFile = await validateExcelFileByMagicBytes(file);
                 if (!isValidFile) {
-                    showToast('文件内容格式不正确，请上传有效的Excel文件', 'error');
+                    // B3修复：非 PK/OLE 魔术字节（如 CSV 改名文件）给出可操作的提示
+                    showToast('不支持该格式（如 CSV），请在 Excel 中打开并另存为 .xlsx 后再使用本工具', 'error');
                     return;
                 }
 
@@ -3684,6 +3970,12 @@
                         
                         // 使用 setTimeout 让 UI 先更新
                         await new Promise(resolve => setTimeout(resolve, 50));
+                        
+                        // 解压炸弹防护（xls 为 OLE 格式，helper 内部自动跳过）
+                        var zipSafe = await isZipContentSafe(data);
+                        if (!zipSafe) {
+                            throw new Error('文件解压后体积异常，疑似压缩炸弹或文件已损坏，已拒绝处理');
+                        }
                         
                         let rawWorkbook;
                         if (isXlsFile) {
@@ -3764,7 +4056,8 @@
                             document.body.removeChild(loadingOverlay);
                         }
                         console.error('文件解析错误:', error);
-                        showToast('文件解析失败: ' + error.message + '（请按F12查看控制台获取详细信息）', 'error');
+                        // B3修复：toast 只给友好中文提示，英文原文和堆栈仅进控制台
+                        showToast(getFriendlyParseErrorMessage(error), 'error');
                     }
                 };
                 reader.onerror = function() {
@@ -3886,7 +4179,8 @@
                     // 记录失败文件名，用于UI展示
                     failedFiles.push(file.name);
                     console.error('文件解析错误:', error);
-                    showToast(`文件 ${file.name} 解析失败: ${error.message || '未知错误'}`, 'error');
+                    // B3修复：toast 只给友好中文提示，英文原文仅进控制台
+                    showToast(`文件 ${file.name}：${getFriendlyParseErrorMessage(error)}`, 'error');
                 }
             }
 
@@ -3945,6 +4239,26 @@
                 injectFullCalcOnLoad(wb);
                 return newWorksheet;
             }
+        }
+
+        /**
+         * 纯数据工作表构建（merge-sheet"仅保留数据"选项）：基准表与追加行走同一路径，
+         * 只保留值/公式/数字格式，剥离一切样式残留
+         * @param {Object} ws - 源工作表对象
+         * @returns {Object} 新工作表对象
+         */
+        function buildDataOnlyWorksheet(ws) {
+            var out = {};
+            var range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+            for (var r = range.s.r; r <= range.e.r; r++) {
+                for (var c = range.s.c; c <= range.e.c; c++) {
+                    var addr = XLSX.utils.encode_cell({ r: r, c: c });
+                    var copy = deepCopyCell(ws[addr], { stripStyle: true });
+                    if (copy) out[addr] = copy;
+                }
+            }
+            out['!ref'] = ws['!ref'];
+            return out;
         }
 
         /**
@@ -4050,6 +4364,13 @@
 
                         const fileName = file.name.toLowerCase();
                         const isXls = fileName.endsWith('.xls');
+                        
+                        // 解压炸弹防护（xls 为 OLE 格式，helper 内部自动跳过）
+                        var mergeZipSafe = await isZipContentSafe(data);
+                        if (!mergeZipSafe) {
+                            reject(new Error('文件解压后体积异常，疑似压缩炸弹或文件已损坏'));
+                            return;
+                        }
                         
                         // 读取文件
                         const rawWorkbook = XLSX.read(data, getReadOptions());
@@ -4158,6 +4479,7 @@
             selectedSheets.clear();
             for (let ki = 0; ki < oldKeys.length; ki++) {
                 var parsed = parseMergeSelectionKey(oldKeys[ki]);
+                if (!parsed) continue; // 键损坏，跳过
                 var fi = parsed.fileIndex;
                 const sn = parsed.sheetName;
                 if (fi === index) {
@@ -4641,6 +4963,7 @@
             checkboxes.forEach(cb => {
                 const key = decodeURIComponent(cb.dataset.key);
                 const parsed = parseMergeSelectionKey(key);
+                if (!parsed) return; // 键损坏，跳过
                 if (parsed.sheetName === sheetName) {
                     cb.checked = checked;
                 }
@@ -4708,7 +5031,7 @@
 
             // 在按名称分组视图中，更新对应分组的计数
             const parsed = parseMergeSelectionKey(key);
-            if (parsed.sheetName && sheetViewMode[currentMode] === 'by-name') {
+            if (parsed && parsed.sheetName && sheetViewMode[currentMode] === 'by-name') {
                 updateNameGroupCount(parsed.sheetName);
             }
         }
@@ -6096,6 +6419,9 @@
             return Array.from(selectedSheets).sort((a, b) => {
                 const pa = parseMergeSelectionKey(a);
                 const pb = parseMergeSelectionKey(b);
+                if (!pa && !pb) return 0;
+                if (!pa) return 1;
+                if (!pb) return -1;
                 if (pa.fileIndex !== pb.fileIndex) return pa.fileIndex - pb.fileIndex;
                 return pa.sheetName.localeCompare(pb.sheetName);
             });
@@ -6115,6 +6441,7 @@
             for (let ski2 = 0; ski2 < sortedKeys.length; ski2++) {
                 var key = sortedKeys[ski2];
                 const parsedKey = parseMergeSelectionKey(key);
+                if (!parsedKey) continue; // 键损坏，跳过
                 var fileIndex = parsedKey.fileIndex;
                 var sheetName = parsedKey.sheetName;
                 const uploadedFile = uploadedFiles[fileIndex];
@@ -6156,38 +6483,52 @@
             await new Promise(resolve => setTimeout(resolve, UI_YIELD_DELAY_MEDIUM));
 
             const sortedKeys = getSortedSelectedSheets();
-            const headerRows = parseInt(document.getElementById('headerRows').value, 10) || 1;
+            const headerRows = getHeaderRowCount('headerRows'); // 0 是合法值（无表头）
+            // 来源列/输出格式选项（mergeSheetOptions 配置区）
+            const addSourceCol = document.getElementById('mergeSourceColEnabled').checked;
+            const sourceColFirst = document.getElementById('mergeSourceColPosFirst').checked;
+            const dataOnly = document.getElementById('mergeDataOnly').checked;
+            const dataColOffset = (addSourceCol && sourceColFirst) ? 1 : 0; // 来源列占首列时数据列右移1
 
             if (sortedKeys.length === 0) {
                 throw new Error('没有选择要合并的工作表');
             }
 
             let baselineRows = null;
+            let maxColumns = 0;
             let mergedWs = null;
             let nextDataRow = 0;
-            let sourceColIdx = 0;
+            var rowLimitHit = false; // A11：Excel 最大行数(1048576)硬上限标记
             const skippedSheets = [];
             const sheetName = getUniqueSheetName([], '合并结果', 0);
 
-            // 【Bug-1 修复】预先扫描所有文件，确定全局最大列数，来源列固定在此位置不漂移
-            let globalMaxColumns = 0;
-            for (let sdm_pre = 0; sdm_pre < sortedKeys.length; sdm_pre++) {
-                const pre_key = sortedKeys[sdm_pre];
-                const pre_parsed = parseMergeSelectionKey(pre_key);
-                const pre_file = uploadedFiles[pre_parsed.fileIndex];
-                const pre_ws = pre_file.workbook.Sheets[pre_parsed.sheetName];
-                if (pre_ws) {
-                    const pre_json = XLSX.utils.sheet_to_json(pre_ws, { header: 1, blankrows: false });
-                    globalMaxColumns = Math.max(globalMaxColumns, getMaxColumnCount(pre_json));
+            // 【BUGFIX-扩展列】预扫描最终列数：列数不同的表经 validateHeaderConsistency(重叠列一致) 合并后，
+            // 来源列(末列)位置必须按最终 maxColumns 对齐，否则基准表来源列放在旧宽度之后(c=5)、追加表放在
+            // 新宽度之后(c=7)，来源列错位。先遍历所有将被合并的表求出 finalMaxColumns，供两分支统一使用。
+            var finalMaxColumns = 0;
+            var preBaselineRows = null;
+            for (var pre_i = 0; pre_i < sortedKeys.length; pre_i++) {
+                var pre_parsed = parseMergeSelectionKey(sortedKeys[pre_i]);
+                if (!pre_parsed) continue;
+                var pre_ws = uploadedFiles[pre_parsed.fileIndex].workbook.Sheets[pre_parsed.sheetName];
+                if (!pre_ws) continue;
+                var pre_json = XLSX.utils.sheet_to_json(pre_ws, { header: 1, blankrows: false });
+                if (pre_json.length <= headerRows) continue; // 与主循环一致：无数据行跳过
+                if (preBaselineRows === null) {
+                    preBaselineRows = pre_json.slice(0, headerRows);
+                } else {
+                    // 与主循环一致的校验：重叠列表头不一致的表会被跳过，不计入最终列数
+                    if (!validateHeaderConsistency(preBaselineRows, pre_json, headerRows).valid) continue;
                 }
+                finalMaxColumns = Math.max(finalMaxColumns, getMaxColumnCount(pre_json));
             }
-            sourceColIdx = globalMaxColumns; // 固定位置，永不移位
 
-            for (let sdm_i = 0; sdm_i < sortedKeys.length; sdm_i++) {
-                const sdm_key = sortedKeys[sdm_i];
-                const sdm_parsed = parseMergeSelectionKey(sdm_key);
-                const sdm_file = uploadedFiles[sdm_parsed.fileIndex];
-                const sdm_ws = sdm_file.workbook.Sheets[sdm_parsed.sheetName];
+            for (var sdm_i = 0; sdm_i < sortedKeys.length; sdm_i++) {
+                var sdm_key = sortedKeys[sdm_i];
+                var sdm_parsed = parseMergeSelectionKey(sdm_key);
+                if (!sdm_parsed) continue; // 键损坏，跳过
+                var sdm_file = uploadedFiles[sdm_parsed.fileIndex];
+                var sdm_ws = sdm_file.workbook.Sheets[sdm_parsed.sheetName];
 
                 if (!sdm_ws) {
                     skippedSheets.push(sdm_file.name + '-' + sdm_parsed.sheetName + ': 工作表不存在');
@@ -6195,7 +6536,8 @@
                 }
 
                 var sdm_json = XLSX.utils.sheet_to_json(sdm_ws, { header: 1, blankrows: false });
-                // 大文件截断：限制最大处理行数
+
+                // 大文件截断：限制最大处理行数（处理模式功能，0=不限制）
                 const maxDataRowsLimit = getMaxDataRows();
                 if (maxDataRowsLimit > 0 && sdm_json.length > maxDataRowsLimit) {
                     sdm_json = sdm_json.slice(0, maxDataRowsLimit);
@@ -6208,67 +6550,110 @@
 
                 if (baselineRows === null) {
                     baselineRows = sdm_json.slice(0, headerRows);
+                    maxColumns = Math.max(getMaxColumnCount(sdm_json), 0);
 
-                    mergedWs = cloneWorksheet(sdm_ws);
+                    // 纯数据输出：基准表也走 deepCopyCell(stripStyle) 路径，不整表 clone
+                    mergedWs = dataOnly ? buildDataOnlyWorksheet(sdm_ws) : cloneWorksheet(sdm_ws);
                     var srcRange = XLSX.utils.decode_range(mergedWs['!ref'] || 'A1');
+                    // 【BUGFIX-非A1基准】基准表 !ref 不从 A1 起始时（如 C3:G5），clone 保留原单元格
+                    // 地址，但后续 !ref 强制重写为 A1 起 → 单元格与 !ref 错位，输出左上角空白。
+                    // 修复：先整体平移到 A1 起始（单元格/合并单元格/超链接/列宽同步偏移），
+                    // 使 srcRange.s 归零，后续来源列与追加行全部以 A1 为基准对齐。
+                    if (srcRange.s.r > 0 || srcRange.s.c > 0) {
+                        normalizeWorksheetToA1(mergedWs, srcRange.s.r, srcRange.s.c);
+                        srcRange = XLSX.utils.decode_range(mergedWs['!ref'] || 'A1');
+                    }
+                    var srcColCount = srcRange.e.c - srcRange.s.c + 1;
                     var srcRowCount = srcRange.e.r - srcRange.s.r + 1;
-                    nextDataRow = srcRowCount;
-
-                    const sdm_source = sdm_file.name + '-' + sdm_parsed.sheetName;
-                    for (let sdm_r = 0; sdm_r < headerRows && sdm_r < srcRowCount; sdm_r++) {
-                        const sdm_srcAddr = XLSX.utils.encode_cell({ r: sdm_r, c: sourceColIdx });
-                        mergedWs[sdm_srcAddr] = { t: 's', v: sdm_r === 0 ? '来源文件' : '' };
+                    // 来源列放首列：数据列整体右移1（单元格/公式/合并单元格/列宽等同步偏移）
+                    if (dataColOffset === 1) {
+                        shiftWorksheetColumnsRight(mergedWs, 1);
                     }
-                    for (let sdm_d = headerRows; sdm_d < srcRowCount; sdm_d++) {
-                        const sdm_dstAddr = XLSX.utils.encode_cell({ r: sdm_d, c: sourceColIdx });
-                        mergedWs[sdm_dstAddr] = { t: 's', v: sdm_source };
+                    // 首列：来源列占据 srcRange.s.c，数据区从 s.c+1 起；末列：来源列放到数据区之后（!ref 可能不从 A 列开始）
+                    var sourceColIdx = sourceColFirst ? srcRange.s.c : srcRange.s.c + finalMaxColumns;
+                    nextDataRow = srcRange.e.r + 1;
+
+                    if (addSourceCol) {
+                        var sdm_source = getBaseFileName(sdm_file.name) + '-' + sdm_parsed.sheetName;
+                        // 多行表头：来源列表头写在最后一行表头，其余表头行留空
+                        for (var sdm_r = 0; sdm_r < headerRows && sdm_r < srcRowCount; sdm_r++) {
+                            var sdm_srcAddr = XLSX.utils.encode_cell({ r: srcRange.s.r + sdm_r, c: sourceColIdx });
+                            mergedWs[sdm_srcAddr] = { t: 's', v: sdm_r === headerRows - 1 ? '来源文件' : '' };
+                        }
+                        for (var sdm_d = headerRows; sdm_d < srcRowCount; sdm_d++) {
+                            var sdm_dstAddr = XLSX.utils.encode_cell({ r: srcRange.s.r + sdm_d, c: sourceColIdx });
+                            mergedWs[sdm_dstAddr] = { t: 's', v: sdm_source };
+                        }
                     }
 
-                    const sdm_newRef = XLSX.utils.encode_range({
+                    var sdm_newRef = XLSX.utils.encode_range({
                         s: { r: 0, c: 0 },
-                        e: { r: srcRowCount - 1, c: sourceColIdx }
+                        e: { r: srcRange.e.r, c: addSourceCol ? srcRange.s.c + finalMaxColumns : Math.max(srcRange.e.c + dataColOffset, srcRange.s.c + finalMaxColumns - 1) }
                     });
                     mergedWs['!ref'] = sdm_newRef;
                 } else {
-                    const sdm_valid = validateHeaderConsistency(baselineRows, sdm_json, headerRows);
+                    var sdm_valid = validateHeaderConsistency(baselineRows, sdm_json, headerRows);
                     if (!sdm_valid.valid) {
                         skippedSheets.push(sdm_file.name + '-' + sdm_parsed.sheetName + ': ' + sdm_valid.reason);
                         continue;
                     }
 
-                    const sdm_dataRows2 = sdm_json.slice(headerRows);
-                    const sdm_source2 = sdm_file.name + '-' + sdm_parsed.sheetName;
-                    // 分片处理数据行，避免UI冻结
-                    const sdmChunkSize = 200;
-                    for (let sdmChunkStart = 0; sdmChunkStart < sdm_dataRows2.length; sdmChunkStart += sdmChunkSize) {
-                        const sdmChunkEnd = Math.min(sdmChunkStart + sdmChunkSize, sdm_dataRows2.length);
-                        for (let sdm_d2 = sdmChunkStart; sdm_d2 < sdmChunkEnd; sdm_d2++) {
-                            const sdm_row2 = sdm_dataRows2[sdm_d2] || [];
-                            for (let sdm_c2 = 0; sdm_c2 < globalMaxColumns; sdm_c2++) {
-                                const sdm_val = sdm_c2 < sdm_row2.length ? sdm_row2[sdm_c2] : '';
-                                const sdm_cellAddr = XLSX.utils.encode_cell({ r: nextDataRow, c: sdm_c2 });
-                                if (typeof sdm_val === 'number') {
-                                    mergedWs[sdm_cellAddr] = { t: 'n', v: sdm_val };
-                                } else if (sdm_val !== undefined && sdm_val !== null && sdm_val !== '') {
-                                    mergedWs[sdm_cellAddr] = { t: 's', v: String(sdm_val) };
-                                }
+                    maxColumns = Math.max(maxColumns, getMaxColumnCount(sdm_json));
+                    var sourceColIdx2 = sourceColFirst ? srcRange.s.c : srcRange.s.c + finalMaxColumns; // 与基准表来源列位置一致(最终列宽)
+                    var srcRange2 = XLSX.utils.decode_range(sdm_ws['!ref'] || 'A1');
+
+                    var sdm_source2 = getBaseFileName(sdm_file.name) + '-' + sdm_parsed.sheetName;
+                    // 【BUGFIX-日期时区】追加行不再经 sheet_to_json 取值重建单元格。
+                    // sheet_to_json 会把 t:'d' 的 Date 按"UTC分量当本地时间"重建，与 XLSX.write 的
+                    // UTC瞬间→serial 转换不对称，导致非UTC时区（如UTC+8回移8小时跨天）日期偏移且丢失z格式。
+                    // 改为按单元格地址直接 deepCopyCell 复制原始 cell：serial/z/t 与基准表clone路径一致无损。
+                    for (var sdm_r2 = srcRange2.s.r + headerRows; sdm_r2 <= srcRange2.e.r; sdm_r2++) {
+                        if (nextDataRow >= 1048576) { // Excel 最大行数硬上限，停止追加
+                            rowLimitHit = true;
+                            break;
+                        }
+                        // 空行压缩：与 sheet_to_json(blankrows:false) 行为一致，整行无有效单元格则跳过
+                        var sdm_rowHasData = false;
+                        for (var sdm_c2 = 0; sdm_c2 < maxColumns; sdm_c2++) {
+                            var sdm_probe = sdm_ws[XLSX.utils.encode_cell({ r: sdm_r2, c: srcRange2.s.c + sdm_c2 })];
+                            if (sdm_probe && sdm_probe.v !== undefined && sdm_probe.v !== null && sdm_probe.v !== '') {
+                                sdm_rowHasData = true;
+                                break;
                             }
-                            const sdm_srcAddr2 = XLSX.utils.encode_cell({ r: nextDataRow, c: sourceColIdx });
+                        }
+                        if (!sdm_rowHasData) continue;
+                        for (var sdm_c2b = 0; sdm_c2b < maxColumns; sdm_c2b++) {
+                            var sdm_srcCell = sdm_ws[XLSX.utils.encode_cell({ r: sdm_r2, c: srcRange2.s.c + sdm_c2b })];
+                            if (!sdm_srcCell) continue; // ragged 行：缺列留空（与原 '' 跳过行为一致）
+                            // stripStyle:true 剥离数字型样式索引（跨工作簿无效），保留对象型内联样式与 z 数字格式
+                            var sdm_cellCopy = deepCopyCell(sdm_srcCell, { stripStyle: true });
+                            if (!sdm_cellCopy) continue;
+                            // 合并后行号已变，公式引用已失效：丢弃 f，仅保留缓存值 v/w
+                            if (sdm_cellCopy.f !== undefined) delete sdm_cellCopy.f;
+                            if (sdm_cellCopy.v === undefined && sdm_cellCopy.w === undefined) continue; // 无值空cell不写入
+                            mergedWs[XLSX.utils.encode_cell({ r: nextDataRow, c: srcRange.s.c + dataColOffset + sdm_c2b })] = sdm_cellCopy;
+                        }
+                        if (addSourceCol) {
+                            var sdm_srcAddr2 = XLSX.utils.encode_cell({ r: nextDataRow, c: sourceColIdx2 });
                             mergedWs[sdm_srcAddr2] = { t: 's', v: sdm_source2 };
-                            nextDataRow++;
                         }
-                        if (sdmChunkEnd < sdm_dataRows2.length) {
-                            await new Promise(function(r) { setTimeout(r, UI_YIELD_DELAY_SMALL); });
-                        }
+                        nextDataRow++;
                     }
 
-                    const sdm_newRef2 = XLSX.utils.encode_range({
+                    var sdm_newRef2 = XLSX.utils.encode_range({
                         s: { r: 0, c: 0 },
-                        e: { r: nextDataRow - 1, c: sourceColIdx }
+                        e: { r: nextDataRow - 1, c: addSourceCol ? srcRange.s.c + finalMaxColumns : Math.max(srcRange.e.c + dataColOffset, srcRange.s.c + finalMaxColumns - 1) }
                     });
                     mergedWs['!ref'] = sdm_newRef2;
+
+                    if (rowLimitHit) { // 已接近 Excel 最大行数，部分数据未合并
+                        showToast('已接近 Excel 最大行数，部分数据未合并', 'warning');
+                        break;
+                    }
                 }
 
+                // 循环每迭代已通过下方 await 让出主线程；同步更新文案便于 200+ 工作表时观察进度
+                loadingText.textContent = `正在合并 第 ${sdm_i + 1}/${sortedKeys.length} 个工作表...`;
                 progressBarFill.style.width = (10 + ((sdm_i + 1) / sortedKeys.length) * 80) + '%';
                 await new Promise(resolve => setTimeout(resolve, UI_YIELD_DELAY_SMALL));
             }
@@ -6277,15 +6662,13 @@
                 throw new Error('没有可合并的数据行');
             }
 
-            const sdm_wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(sdm_wb, mergedWs, sheetName);
-
-            // 应用排序（如果启用了）
+            // 应用排序（如果启用了）—— 必须在 book_append 之前执行，否则排序后的工作表不会被写入工作簿
             if (currentMode === 'merge-sheet') {
                 const sortEnabled = document.getElementById('mergeSheetSortEnabled');
                 if (sortEnabled && sortEnabled.checked) {
                     const sortColName = document.getElementById('mergeSheetSortColumn').value;
-                    const sortOrderEl = document.querySelector('input[name="mergeSheetSortOrder"]:checked'); const sortOrder = sortOrderEl ? sortOrderEl.value : 'asc';
+                    const sortOrderEl = document.querySelector('input[name="mergeSheetSortOrder"]:checked');
+                    const sortOrder = sortOrderEl ? sortOrderEl.value : 'asc';
                     if (sortColName) {
                         const arrData = XLSX.utils.sheet_to_json(mergedWs, { header: 1 });
                         const sorted = sortMergedData(arrData, [{ column: sortColName, order: sortOrder }]);
@@ -6294,19 +6677,27 @@
                 }
             }
 
+            var sdm_wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(sdm_wb, mergedWs, sheetName);
+
             injectFullCalcOnLoad(sdm_wb);
             var sdm_buf = XLSX.write(sdm_wb, getWriteOptions());
-            sdm_buf = await injectFullCalcOnLoadIntoBuffer(sdm_buf);
+            sdm_buf = await injectFullCalcOnLoadIntoBufferGuarded(sdm_buf, sdm_wb);
 
             mergedFileBlob = new Blob([sdm_buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
             mergedFileName = getMergeOutputFileName();
 
             lastMergeStatistics = {
                 sourceFileCount: uploadedFiles.length,
-                totalSheets: sortedKeys.length
+                totalSheets: sortedKeys.length,
+                mergedRows: mergedWs ? mergedWs['!ref'] ? XLSX.utils.decode_range(mergedWs['!ref']).e.r + 1 : 0 : 0,
+                skippedEmpty: skippedSheets.filter(function(s) { return s.indexOf('无数据行') !== -1 || s.indexOf('工作表不存在') !== -1; }).length,
+                skippedHeader: skippedSheets.filter(function(s) { return s.indexOf('不匹配') !== -1; }).length,
+                skippedColumn: skippedSheets.filter(function(s) { return s.indexOf('列数不一致') !== -1; }).length
             };
             lastSkippedSheets = skippedSheets;
         }
+
 
         /**
          * P2.1 列标题智能匹配（按名对齐）
@@ -6333,6 +6724,7 @@
             for (let smi = 0; smi < sortedKeys.length; smi++) {
                 const sm_key = sortedKeys[smi];
                 const sm_parsed = parseMergeSelectionKey(sm_key);
+                if (!sm_parsed) continue; // 键损坏，跳过
                 const sm_file = uploadedFiles[sm_parsed.fileIndex];
                 const sm_ws = sm_file.workbook.Sheets[sm_parsed.sheetName];
 
@@ -6486,6 +6878,7 @@
                     for (let smPre = 0; smPre < sortedKeys.length; smPre++) {
                         const preKey = sortedKeys[smPre];
                         const preParsed = parseMergeSelectionKey(preKey);
+                            if (!preParsed) continue; // 键损坏，跳过
                         const preWs = uploadedFiles[preParsed.fileIndex].workbook.Sheets[preParsed.sheetName];
                         if (preWs && preWs['!ref']) {
                             const preRange = XLSX.utils.decode_range(preWs['!ref']);
@@ -6631,6 +7024,7 @@
                     for (let smBi = 0; smBi < sortedKeys.length; smBi++) {
                         const bKey = sortedKeys[smBi];
                         const bParsed = parseMergeSelectionKey(bKey);
+                        if (!bParsed) continue; // 键损坏，跳过
                         const bWs = uploadedFiles[bParsed.fileIndex].workbook.Sheets[bParsed.sheetName];
                         if (!bWs) continue;
                         const normName = normalizeSheetNameForGroup(bParsed.sheetName);
@@ -6932,6 +7326,7 @@
                 const allData = [];
                 for (const key of sortedKeys) {
                     const parsed = parseMergeSelectionKey(key);
+                    if (!parsed) continue; // 键损坏，跳过
                     const file = uploadedFiles[parsed.fileIndex];
                     if (!file) continue;
                     const ws = file.workbook.Sheets[parsed.sheetName];
@@ -7916,8 +8311,8 @@
                 const r1 = validateHeaderConsistency([['A', 'B']], [['A', 'B']], 1);
                 const r2 = validateHeaderConsistency([['A', 'B']], [['A', 'B', 'C']], 1);
                 const r3 = validateHeaderConsistency([['A', 'B']], [['X', 'Y']], 1);
-                const r4 = validateHeaderConsistency([['A', 'B', 'C']], [['A', 'B']], 1); // 后续列数更少 -> 失败
-                if (r1.valid === true && r2.valid === true && r3.valid === false && r4.valid === false) pass('T52 validateHeaderConsistency');
+                const r4 = validateHeaderConsistency([['A', 'B', 'C']], [['A', 'B']], 1); // 后续列数更少但重叠列一致 -> 允许合并
+                if (r1.valid === true && r2.valid === true && r3.valid === false && r4.valid === true) pass('T52 validateHeaderConsistency');
                 else fail('T52 validateHeaderConsistency', 'r1=' + r1.valid + ' r2=' + r2.valid + ' r3=' + r3.valid + ' r4=' + r4.valid);
             } catch (e) { fail('T52 validateHeaderConsistency', e.message); }
 
@@ -8394,11 +8789,11 @@
             } catch (e) { fail('T98 merge-sheet 表头不一致检测', e.message); }
 
             try {
-                // merge-sheet: 列数不足检测（后续文件列数不能少于基准表）
+                // merge-sheet: 后续文件列数更少但重叠列一致 -> 允许合并（BUGFIX-扩展列，少列补空）
                 const r = validateHeaderConsistency([['A', 'B', 'C']], [['A', 'B']], 1);
-                if (r.valid === false && r.reason && r.reason.indexOf('列数不足') !== -1) pass('T99 merge-sheet 列数不足检测');
-                else fail('T99 merge-sheet 列数不足检测', 'valid=' + r.valid + ' reason=' + r.reason);
-            } catch (e) { fail('T99 merge-sheet 列数不足检测', e.message); }
+                if (r.valid === true) pass('T99 merge-sheet 扩展列（后续列数更少）');
+                else fail('T99 merge-sheet 扩展列（后续列数更少）', 'valid=' + r.valid + ' reason=' + r.reason);
+            } catch (e) { fail('T99 merge-sheet 扩展列（后续列数更少）', e.message); }
 
             // ─── T100-T104: DOM与UI基础验证 ───
             try {
@@ -8835,6 +9230,42 @@
             } catch(e) { /* URL清理异常可忽略 */ }
         }
 
+        /**
+         * 统一的 Blob 下载 helper（含 IE/旧Edge 兜底）
+         * 创建 ObjectURL 时统一登记到 activeObjectURLs / pendingRevokeTimers，供 resetTool/checkMemoryUsage 释放
+         */
+        function saveBlobAs(blob, fname) {
+            if (navigator.msSaveBlob) { // IE/旧版 Edge 兜底
+                navigator.msSaveBlob(blob, fname);
+                return;
+            }
+            var url = URL.createObjectURL(blob);
+            activeObjectURLs.push(url);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = fname;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            var timer = setTimeout(function() {
+                try { URL.revokeObjectURL(url); } catch(e) {}
+                var idx = activeObjectURLs.indexOf(url);
+                if (idx !== -1) activeObjectURLs.splice(idx, 1);
+            }, REVOKE_URL_DELAY);
+            pendingRevokeTimers.push(timer);
+        }
+
+        /**
+         * 下载单个生成的文件（结果文件列表中每个文件的"下载"按钮）
+         * @param {number} index - generatedFiles 索引
+         */
+        function downloadSingleFile(index) {
+            var file = generatedFiles[index];
+            if (!file || !file.data || !file.name) return;
+            var blob = new Blob([file.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            saveBlobAs(blob, file.name);
+        }
+
         function downloadAllFiles() {
             const btn = document.getElementById('downloadBtn');
             const blob = currentMode.startsWith('split') ? zipBlob : mergedFileBlob;
@@ -8968,6 +9399,7 @@
             const sortedKeys = getSortedSelectedSheets();
             for (const key of sortedKeys) {
                 const parsed = parseMergeSelectionKey(key);
+                if (!parsed) continue; // 键损坏，跳过
                 const file = uploadedFiles[parsed.fileIndex];
                 if (!file) continue;
                 const ws = file.workbook.Sheets[parsed.sheetName];
