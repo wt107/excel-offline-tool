@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self' blob:; img-src 'self' data: blob:;">
     <meta name="description" content="Excel离线处理工具 - 文件仅在本地处理，不会上传服务器">
-    <title>Excel文件处理工具 v1.5.3</title>
+    <title>Excel文件处理工具 v1.5.5</title>
     <!-- 内网离线环境：不依赖外网字体，使用系统字体 -->
 
     <!-- ES5嗅探：老浏览器缺少必要API时置标志，由 initializeApp 显示提示并中止 -->
@@ -446,6 +446,69 @@
             font-weight: 600;
             color: #495057;
             word-break: break-all;
+        }
+
+        /* 工作表管理模式的行样式：左对齐、紧凑、不随hover上浮 */
+        .sheet-item.sheet-manager-item {
+            justify-content: flex-start;
+            padding: 8px 12px;
+            cursor: default;
+        }
+        .sheet-item.sheet-manager-item:hover {
+            transform: none;
+            box-shadow: none;
+        }
+        .sheet-manager-item .sheet-manager-name {
+            flex: 1;
+            min-width: 0;
+            border: 1px solid #ced4da;
+            border-radius: 6px;
+            padding: 6px 10px;
+            font-size: 0.95em;
+            color: #212529;
+            background: white;
+        }
+        .sheet-manager-item .sheet-manager-name:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+        }
+        .sheet-manager-item .sheet-move-btn {
+            padding: 4px 10px;
+            min-width: 36px;
+            line-height: 1;
+            font-size: 0.9em;
+        }
+        .sheet-manager-item .sheet-move-btn:disabled {
+            opacity: 0.35;
+            cursor: not-allowed;
+        }
+        .sheet-name-conflict {
+            display: none;
+            color: #d63384;
+            font-size: 12px;
+            white-space: nowrap;
+            font-weight: 600;
+        }
+        .sheet-manager-item .sheet-manager-name.has-conflict {
+            border-color: #faa2c1;
+            background: #fff0f6;
+        }
+        .sm-summary-block {
+            background: #f8f9fa;
+            border-radius: 6px;
+            padding: 8px 10px;
+            margin-bottom: 6px;
+            word-break: break-all;
+        }
+        .sm-summary-block.sm-summary-removed {
+            background: #fff5f5;
+            border: 1px solid #ffe3e3;
+        }
+        .sm-summary-title {
+            font-size: 13px;
+            color: #343a40;
+            line-height: 1.5;
         }
 
         .file-info {
@@ -900,6 +963,141 @@
             color: #495057;
         }
 
+        /* 多页文件高亮 */
+        .file-sheet-group-header.multi-sheet-file {
+            background: #f1f5ff;
+            margin: -15px -15px 10px -15px;
+            padding: 10px 15px;
+            border-bottom: 1px solid #d8e2fb;
+            border-radius: 8px 8px 0 0;
+        }
+        .file-sheet-count-badge {
+            font-size: 11px;
+            font-weight: 600;
+            color: #6c757d;
+            background: #f1f3f5;
+            padding: 1px 8px;
+            border-radius: 10px;
+        }
+        .file-sheet-count-badge.multi {
+            color: #1a5cf0;
+            background: #e7efff;
+        }
+        .sheet-preview-btn {
+            margin-left: auto;
+            font-size: 12px;
+            padding: 3px 12px;
+            border: 1px solid #ced4da;
+            border-radius: 14px;
+            background: #fff;
+            color: #495057;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .sheet-preview-btn:hover {
+            background: #e7efff;
+            border-color: #1a5cf0;
+            color: #1a5cf0;
+        }
+
+        /* 工作表预览弹窗 */
+        .sheet-preview-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.45);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s ease, visibility 0.2s ease;
+        }
+        .sheet-preview-overlay.open {
+            opacity: 1;
+            visibility: visible;
+        }
+        .sheet-preview-modal {
+            background: #fff;
+            border-radius: 12px;
+            width: min(720px, 92vw);
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 12px 40px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        .sheet-preview-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 18px;
+            border-bottom: 1px solid #e9ecef;
+            font-weight: 600;
+            color: #212529;
+        }
+        .sheet-preview-close {
+            border: none;
+            background: none;
+            font-size: 18px;
+            color: #6c757d;
+            cursor: pointer;
+            padding: 0 6px;
+            line-height: 1;
+        }
+        .sheet-preview-close:hover { color: #212529; }
+        .sheet-preview-body {
+            overflow: auto;
+            padding: 16px 18px;
+        }
+        .sheet-preview-body .prev-file {
+            margin-bottom: 18px;
+        }
+        .sheet-preview-body .prev-file-title {
+            font-weight: 600;
+            color: #1a5cf0;
+            margin-bottom: 6px;
+            font-size: 13px;
+        }
+        .sheet-preview-body .prev-sheet {
+            margin: 10px 0;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .sheet-preview-body .prev-sheet-name {
+            background: #f8f9fa;
+            padding: 6px 10px;
+            font-weight: 600;
+            font-size: 13px;
+            color: #343a40;
+            border-bottom: 1px solid #e9ecef;
+        }
+        .sheet-preview-body table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        .sheet-preview-body th, .sheet-preview-body td {
+            border: 1px solid #e9ecef;
+            padding: 4px 8px;
+            text-align: left;
+            white-space: nowrap;
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .sheet-preview-body th {
+            background: #f1f5ff;
+            font-weight: 600;
+            color: #495057;
+        }
+        .sheet-preview-empty {
+            color: #adb5bd;
+            font-size: 12px;
+            padding: 4px 10px;
+        }
+
         .controls {
             display: flex;
             justify-content: space-between;
@@ -1090,7 +1288,7 @@
     <div class="container">
             <div class="header">
             <div class="header-top">
-                <h1>📊 Excel文件处理工具 <span class="cs-version">v1.5.3</span></h1>
+                <h1>📊 Excel文件处理工具 <span class="cs-version">v1.5.5</span></h1>
             </div>
             <p>支持文件拆分和合并功能</p>
         </div>
@@ -1100,6 +1298,7 @@
             <button class="mode-btn" data-mode="split-column" role="tab" aria-selected="false" aria-label="按列拆分(横向)">📋 按列拆分(横向)</button>
             <button class="mode-btn" data-mode="split-column-vertical" role="tab" aria-selected="false" aria-label="按列拆分(竖向)">📊 按列拆分(竖向)</button>
             <button class="mode-btn" data-mode="split-rows" role="tab" aria-selected="false" aria-label="按行数拆分">✂️ 按行数拆分</button>
+            <button class="mode-btn" data-mode="split-sheet-manager" role="tab" aria-selected="false" aria-label="工作表管理">🗂️ 工作表管理</button>
             <button class="mode-btn" data-mode="merge-file" role="tab" aria-selected="false" aria-label="文件合并">📁 文件合并</button>
             <button class="mode-btn" data-mode="merge-sheet" role="tab" aria-selected="false" aria-label="工作表数据合并">📑 工作表数据合并</button>
             <button class="mode-btn" data-mode="smart-merge" role="tab" aria-selected="false" aria-label="智能合并大师">🧠 智能合并大师</button>
@@ -1244,6 +1443,27 @@
                                 <label><input type="radio" name="splitSheetOutputFormat" value="single"> 单文件（多工作表）</label>
                             </div>
                             <p class="cs-form-hint">ZIP模式为每个工作表生成独立文件并打包；单文件模式将工作表合并到同一工作簿</p>
+                        </div>
+                    </div>
+                    <div id="sheetManagerOptions" class="cs-hidden">
+                        <p class="cs-desc-text">勾选保留的工作表，可重命名、调整顺序，导出为单个 Excel 文件</p>
+                        <div class="cs-form-section">
+                            <label class="cs-form-label">保留 / 删除清单（生成前核对）</label>
+                            <div id="sheetManagerSummary" class="cs-sheet-manager-summary"></div>
+                            <p class="cs-form-hint">再次确认要保留哪些页、删除哪些页后再生成。</p>
+                        </div>
+                        <div class="cs-form-section">
+                            <label class="cs-form-label">处理模式 <span class="cs-form-hint" style="font-weight:400;">（覆盖全局设置）</span></label>
+                            <select id="sheetManagerProcessMode" class="cs-form-input" style="max-width:200px;">
+                                <option value="">跟随全局</option>
+                                <option value="full">保留格式</option>
+                                <option value="data">仅数据</option>
+                            </select>
+                        </div>
+                        <div class="cs-form-section">
+                            <label class="cs-form-label">导出文件名</label>
+                            <input type="text" id="sheetManagerFileName" value="{original}_managed" aria-label="工作表管理导出文件名" class="cs-form-input">
+                            <p class="cs-form-hint">可用变量：{original}原文件名 {date}日期 {time}时间</p>
                         </div>
                     </div>
                     <div id="splitColumnOptions" class="cs-hidden">
@@ -1407,24 +1627,27 @@
                             </label>
                             <p class="cs-form-hint">对合并后的数据执行整行去重（排除来源列后比较）</p>
                         </div>
+                        <p class="cs-form-hint" style="color:#e65100;margin-top:8px;">注意：智能合并输出为"纯数据表"，原表的字体、边框、合并单元格、列宽、数字格式不会保留。</p>
                     </div>
                      <div id="mergeSheetOptions" class="cs-hidden">
                         <div class="cs-form-section">
                             <label class="cs-form-label" style="font-weight:600;margin-bottom:8px;">合并策略</label>
+                            <p class="cs-form-hint">表头/列顺序不一致时，建议使用"标题匹配"避免数据错位或丢失</p>
                             <div style="display:flex;flex-direction:column;gap:6px;">
                                 <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
-                                    <input type="radio" name="mergeStrategy" value="strict" checked>
-                                    <span><strong>严格追加</strong> — 要求所有工作表列数、列名、顺序完全一致</span>
+                                    <input type="radio" name="mergeStrategy" value="match" checked>
+                                    <span><strong>标题匹配（推荐）</strong> — 按列名自动对齐，允许列顺序不同、列数不同，缺失列留空</span>
                                 </label>
                                 <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
                                     <input type="radio" name="mergeStrategy" value="smart">
                                     <span><strong>智能追加</strong> — 允许后续文件有更多列，按位置对齐，缺失列留空</span>
                                 </label>
                                 <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
-                                    <input type="radio" name="mergeStrategy" value="match">
-                                    <span><strong>标题匹配</strong> — 允许列顺序不同，按列名自动匹配（以第一个文件为基准）</span>
+                                    <input type="radio" name="mergeStrategy" value="strict">
+                                    <span><strong>严格追加</strong> — 要求所有工作表列数、列名、顺序完全一致，不一致的表会被跳过</span>
                                 </label>
                             </div>
+                            <p class="cs-form-hint" style="color:#e65100;margin-top:8px;">注意：数据合并为"纯数据表"，原表的字体、边框、合并单元格、列宽、数字格式不会保留。如需保留格式请用「工作表管理」。</p>
                         </div>
                         <div class="separator-option">
                             <label>表头行数</label>
@@ -1507,6 +1730,7 @@
                             <div class="sheet-list" id="summaryValueColumns"></div>
                             <p class="cs-form-hint">选择要进行汇总计算的数值列</p>
                         </div>
+                        <p class="cs-form-hint" style="color:#e65100;margin-top:8px;">注意：汇总结果为"纯数据表"，不含原表格式；数值列中的千分位/货币/文本格式会被自动解析，无法解析的按非数值忽略并提示。</p>
                     </div>
                      <div id="dataJoinOptions" class="cs-hidden">
                         <p class="cs-desc-text">按关键列匹配两表数据，类似 SQL JOIN，支持一对一和一对多匹配</p>
@@ -1532,6 +1756,7 @@
                             <select id="joinRightKeyColumn" class="cs-form-input"><option value="">- 请先上传文件 -</option></select>
                             <p class="cs-form-hint">以第二个文件为右表</p>
                         </div>
+                        <p class="cs-form-hint" style="color:#e65100;margin-top:8px;">注意：匹配结果为"纯数据表"，不含原表格式；关键列值会忽略首尾空格、大小写差异自动匹配，未匹配上的行数会在结果中提示。</p>
                     </div>
                 </div>
                 <div class="button-group">
@@ -1579,6 +1804,17 @@
                     </button>
                 </div>
             </div>
+
+        <!-- 工作表预览弹窗 -->
+        <div class="sheet-preview-overlay" id="sheetPreviewOverlay" aria-hidden="true">
+            <div class="sheet-preview-modal" role="dialog" aria-modal="true" aria-labelledby="sheetPreviewTitle">
+                <div class="sheet-preview-header">
+                    <span id="sheetPreviewTitle">工作表预览</span>
+                    <button type="button" class="sheet-preview-close" id="sheetPreviewClose" aria-label="关闭预览">✕</button>
+                </div>
+                <div class="sheet-preview-body" id="sheetPreviewBody"></div>
+            </div>
+        </div>
 
     <script id="main-app-script" nonce="excel-offline-2026">
 (function() {
@@ -1653,6 +1889,7 @@
     let currentMode = 'split-sheet';      // 当前操作模式
     let workbook = null;                   // 当前解析的工作簿
     let selectedSheets = new Set();        // 选中的工作表集合
+    let sheetManagerSheets = [];           // 工作表管理模式：{name, checked} 数组，顺序即展示顺序
     let splitColumn = null;                // 按列拆分选中的列
     let generatedFiles = [];               // 生成的文件列表
     let originalFileName = '';             // 原始文件名
@@ -1757,6 +1994,7 @@
             'split-column': 'splitColumnProcessMode',
             'split-column-vertical': 'splitVerticalProcessMode',
             'split-rows': 'splitRowsProcessMode',
+            'split-sheet-manager': 'sheetManagerProcessMode',
             'merge-file': null,
             'merge-sheet': null,
             'smart-merge': null,
@@ -3400,6 +3638,7 @@
             } catch(e) { /* 整体清理异常可忽略 */ }
             workbook = null;
             selectedSheets = new Set();
+            sheetManagerSheets = [];
             generatedFiles.length = 0;
             splitReport = null;
             selectedSheetForColumn = null;
@@ -3437,6 +3676,7 @@
             'split-column-vertical': '把不同的列拆到多个文件',
             'split-rows': '按行数拆分',
             'merge-file': '多个文件合并为一个工作簿（每个来源一个工作表）',
+            'split-sheet-manager': '管理工作表：删除、重命名、调整顺序后导出',
             'merge-sheet': '多个工作表的数据合并到一张总表',
             'smart-merge': '智能合并大师',
             'summary-merge': '合并计算',
@@ -4233,7 +4473,9 @@
                         checkCellCountWarning(workbook, boundaryWarnings);
                         
                         let step2TitleText = '选择工作表（仅能选择一张）';
-                        if (currentMode === 'split-sheet') {
+                        if (currentMode === 'split-sheet-manager') {
+                            step2TitleText = '管理工作表（勾选保留，可重命名/排序）';
+                        } else if (currentMode === 'split-sheet') {
                             step2TitleText = '选择工作表（已默认全选）';
                         } else if (currentMode === 'split-column-vertical') {
                             step2TitleText = '选择工作表（竖向拆分只能选择一张）';
@@ -4244,7 +4486,9 @@
                         
                         csShow(document.getElementById('step1ButtonGroup'), 'cs-block');
                         csShow(document.getElementById('processingModeBar'), 'cs-flex');
-                        if (currentMode === 'split-sheet') {
+                        if (currentMode === 'split-sheet-manager') {
+                            displaySheetManager();
+                        } else if (currentMode === 'split-sheet') {
                             displaySplitSheets();
                         }
                         document.getElementById('step1Next').disabled = false;
@@ -4306,6 +4550,14 @@
 
             if (validFiles.length === 0) {
                 showToast('没有有效的Excel文件', 'error');
+                return;
+            }
+
+            // 硬性限制：合并/汇总/匹配类模式同样拒绝超大文件（与拆分入口一致），
+            // 避免大文件被完整读入内存导致浏览器标签页 OOM/白屏。
+            const oversized = validFiles.filter(file => file.size > HARD_LIMIT_FILE_BYTES);
+            if (oversized.length > 0) {
+                showToast(`以下文件过大，超过硬性限制（${formatFileSize(HARD_LIMIT_FILE_BYTES)}），可能导致浏览器崩溃：${oversized.map(f => f.name).join('、')}。请使用专业工具处理后重试。`, 'error');
                 return;
             }
 
@@ -4764,6 +5016,331 @@
             updateSelectedCount();
         }
 
+        // ═══════════════════════════════════════════════════════════════
+        // #region [SECTION] 工作表管理（split-sheet-manager）
+        // ═══════════════════════════════════════════════════════════════
+
+        /**
+         * 渲染工作表管理列表到 #sheetList。
+         * 每行：保留checkbox + 可编辑名称 + 上移/下移按钮。
+         * 用 sheetManagerSheets 数组维护状态（顺序即展示顺序）。
+         */
+        function displaySheetManager() {
+            const sheetList = document.getElementById('sheetList');
+            if (!sheetList) return;
+
+            // 工作表管理不需要"全选/取消全选"和搜索过滤，隐藏相关控件
+            const filterBar = document.getElementById('splitSheetFilterBar');
+            if (filterBar) filterBar.style.display = 'none';
+            const controls = sheetList.parentElement ? sheetList.parentElement.querySelector('.controls') : null;
+            if (controls) controls.style.display = 'none';
+
+            // 初始化状态：从 workbook 全部保留、保持原顺序
+            sheetManagerSheets = workbook.SheetNames.map(function(sn) {
+                return { name: sn, origName: sn, checked: true };
+            });
+
+            sheetList.innerHTML = '';
+            renderSheetManagerList();
+        }
+
+        function renderSheetManagerList() {
+            const sheetList = document.getElementById('sheetList');
+            if (!sheetList) return;
+            sheetList.innerHTML = '';
+
+            sheetManagerSheets.forEach(function(item, index) {
+                const row = document.createElement('div');
+                row.className = 'sheet-item sheet-manager-item';
+
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.className = 'sheet-checkbox';
+                checkbox.checked = item.checked;
+                checkbox.setAttribute('aria-label', '保留工作表 ' + item.name);
+                checkbox.addEventListener('change', function() {
+                    item.checked = checkbox.checked;
+                    row.classList.toggle('selected', item.checked);
+                    updateSheetManagerControls();
+                });
+
+                const nameInput = document.createElement('input');
+                nameInput.type = 'text';
+                nameInput.className = 'sheet-manager-name';
+                nameInput.value = item.name;
+                nameInput.setAttribute('aria-label', '工作表名称 ' + item.name);
+                nameInput.maxLength = 31;
+                nameInput.addEventListener('input', function() {
+                    checkSheetManagerNameConflict();
+                });
+                nameInput.addEventListener('change', function() {
+                    const newName = nameInput.value.trim();
+                    if (newName) {
+                        item.name = newName;
+                    } else {
+                        nameInput.value = item.name; // 空名回退
+                    }
+                    checkSheetManagerNameConflict();
+                });
+
+                // 重名冲突提示（与其他保留表同名时显示）
+                const warnSpan = document.createElement('span');
+                warnSpan.className = 'sheet-name-conflict';
+                warnSpan.textContent = '⚠ 重名';
+                warnSpan.title = '存在多个同名工作表，导出时将自动加后缀（如 名称_1）';
+                row.appendChild(warnSpan);
+
+                const upBtn = document.createElement('button');
+                upBtn.type = 'button';
+                upBtn.className = 'btn btn-secondary sheet-move-btn';
+                upBtn.textContent = '↑';
+                upBtn.setAttribute('aria-label', '上移 ' + item.name);
+                upBtn.disabled = index === 0;
+                upBtn.addEventListener('click', function() { moveSheetManagerItem(index, -1); });
+
+                const downBtn = document.createElement('button');
+                downBtn.type = 'button';
+                downBtn.className = 'btn btn-secondary sheet-move-btn';
+                downBtn.textContent = '↓';
+                downBtn.setAttribute('aria-label', '下移 ' + item.name);
+                downBtn.disabled = index === sheetManagerSheets.length - 1;
+                downBtn.addEventListener('click', function() { moveSheetManagerItem(index, 1); });
+
+                row.appendChild(checkbox);
+                row.appendChild(nameInput);
+                row.appendChild(upBtn);
+                row.appendChild(downBtn);
+
+                if (item.checked) row.classList.add('selected');
+                sheetList.appendChild(row);
+            });
+
+            checkSheetManagerNameConflict();
+            updateSheetManagerControls();
+        }
+
+        /**
+         * 检测保留表中的重名冲突，冲突行显示 ⚠ 重名 提示。
+         * 同名但名称完全相同即提示（导出时会被唯一化加后缀）。
+         */
+        function checkSheetManagerNameConflict() {
+            const nameCount = {};
+            sheetManagerSheets.forEach(function(it) {
+                if (!it.checked) return;
+                const n = it.name;
+                nameCount[n] = (nameCount[n] || 0) + 1;
+            });
+            const rows = document.querySelectorAll('.sheet-manager-item');
+            rows.forEach(function(row, index) {
+                const warn = row.querySelector('.sheet-name-conflict');
+                const input = row.querySelector('.sheet-manager-name');
+                const it = sheetManagerSheets[index];
+                if (warn && it) {
+                    const duplicated = it.checked && (nameCount[it.name] || 0) > 1;
+                    warn.style.display = duplicated ? 'inline' : 'none';
+                }
+                if (input && it) {
+                    input.classList.toggle('has-conflict', it.checked && (nameCount[it.name] || 0) > 1);
+                }
+            });
+        }
+
+        /**
+         * 更新 step3 的"保留/删除清单"摘要，供生成前核对。
+         */
+        function updateSheetManagerSummary() {
+            const summaryEl = document.getElementById('sheetManagerSummary');
+            if (!summaryEl || !sheetManagerSheets) return;
+            const kept = sheetManagerSheets.filter(function(it) { return it.checked; });
+            const removed = sheetManagerSheets.filter(function(it) { return !it.checked; });
+
+            summaryEl.innerHTML = '';
+            const keptDiv = document.createElement('div');
+            keptDiv.className = 'sm-summary-block';
+            const keptTitle = document.createElement('div');
+            keptTitle.className = 'sm-summary-title';
+            keptTitle.textContent = '✅ 将保留（' + kept.length + ' 个）：' + kept.map(function(it) { return it.name; }).join('、');
+            keptDiv.appendChild(keptTitle);
+            summaryEl.appendChild(keptDiv);
+
+            if (removed.length > 0) {
+                const removedDiv = document.createElement('div');
+                removedDiv.className = 'sm-summary-block sm-summary-removed';
+                const removedTitle = document.createElement('div');
+                removedTitle.className = 'sm-summary-title';
+                removedTitle.textContent = '🗑 将删除（' + removed.length + ' 个）：' + removed.map(function(it) { return it.name; }).join('、');
+                removedDiv.appendChild(removedTitle);
+                summaryEl.appendChild(removedDiv);
+            }
+        }
+
+        /** 在数组中移动某项，delta 为 -1（上移）或 +1（下移） */
+        function moveSheetManagerItem(index, delta) {
+            const target = index + delta;
+            if (target < 0 || target >= sheetManagerSheets.length) return;
+            const tmp = sheetManagerSheets[index];
+            sheetManagerSheets[index] = sheetManagerSheets[target];
+            sheetManagerSheets[target] = tmp;
+            renderSheetManagerList();
+        }
+
+        /** 统计勾选保留的工作表数量 */
+        function getCheckedSheetManagerCount() {
+            if (!sheetManagerSheets) return 0;
+            return sheetManagerSheets.filter(function(it) { return it.checked; }).length;
+        }
+
+        /** 同步 step2Next / step3Next 的可用状态 */
+        function updateSheetManagerControls() {
+            const count = getCheckedSheetManagerCount();
+            const step2Next = document.getElementById('step2Next');
+            const step3Next = document.getElementById('step3Next');
+            if (step2Next) step2Next.disabled = count === 0;
+            if (step3Next) step3Next.disabled = count === 0;
+        }
+
+        /**
+         * 生成工作表管理结果：把勾选保留的 sheet 按当前顺序（含重命名）导出为单个工作簿。
+         */
+        async function generateSheetManagerFile() {
+            if (isProcessing) {
+                showToast('正在处理中，请稍候...', 'warning');
+                return;
+            }
+            isProcessing = true;
+
+            const loading = document.getElementById('loading');
+            const loadingText = document.getElementById('loadingText');
+            const progressBarFill = document.getElementById('progressBarFill');
+            csShow(loading, 'cs-flex');
+            csHide(document.getElementById('resultSummary'));
+            csHide(document.getElementById('fileListCard'));
+            csHide(document.getElementById('downloadBtn'));
+
+            try {
+                const kept = sheetManagerSheets.filter(function(it) { return it.checked; });
+                if (kept.length === 0) {
+                    showToast('请至少保留一个工作表', 'warning');
+                    isProcessing = false;
+                    csHide(loading);
+                    return;
+                }
+
+                loadingText.textContent = '正在生成工作表管理结果...';
+                progressBarFill.style.width = '10%';
+                await new Promise(resolve => setTimeout(resolve, UI_YIELD_DELAY_MEDIUM));
+
+                const newWb = XLSX.utils.book_new();
+                const effMode = getEffectiveProcessingMode('split-sheet-manager');
+
+                for (let i = 0; i < kept.length; i++) {
+                    const srcName = kept[i].origName; // 原始 sheet 名（重命名后仍可定位数据）
+                    const ws = workbook.Sheets[srcName];
+                    if (!ws) continue;
+                    let wsClone;
+                    // 克隆保留单元格结构；样式剥离由 getWriteOptions 的 cellStyles:false 在写入时完成
+                    wsClone = cloneWorksheet(ws);
+                    // 仅数据模式：显式删除单元格样式（s），确保字体/填充/边框全部剥离
+                    if (effMode === 'data') {
+                        wsClone = stripStylesFromWorksheet(wsClone);
+                    }
+                    // 目标工作表名：用重命名后的名称，重名时唯一化
+                    const targetName = getUniqueSheetNameForManager(newWb, kept[i].name);
+                    XLSX.utils.book_append_sheet(newWb, wsClone, targetName);
+                    progressBarFill.style.width = (10 + ((i + 1) / kept.length) * 80) + '%';
+                    await new Promise(resolve => setTimeout(resolve, UI_YIELD_DELAY_SMALL));
+                }
+
+                // 检查是否全部为空（全被跳过）
+                if (newWb.SheetNames.length === 0) {
+                    showToast('没有可导出的工作表', 'warning');
+                    isProcessing = false;
+                    csHide(loading);
+                    return;
+                }
+
+                // 命名
+                const base = getSheetManagerFileName();
+                const out = XLSX.write(newWb, getWriteOptions());
+                const blob = new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                mergedFileBlob = blob;
+                mergedFileName = base + getExportExtension();
+
+                // 渲染结果：单文件输出，生成文件数恒为1（totalFiles 显示文件数而非工作表数）
+                document.getElementById('totalFiles').textContent = '1';
+                document.getElementById('totalSize').textContent = formatFileSize(blob.size);
+                const skipEl = document.getElementById('skippedEmptySheetsInfo');
+                if (skipEl) skipEl.textContent = '';
+
+                const listEl = document.getElementById('resultFileList');
+                listEl.innerHTML = '';
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'file-item';
+                const nameSpan = document.createElement('span');
+                nameSpan.className = 'file-name';
+                nameSpan.textContent = mergedFileName;
+                itemDiv.appendChild(nameSpan);
+                listEl.appendChild(itemDiv);
+                csShow(document.getElementById('fileListCard'), 'cs-block');
+
+                progressBarFill.style.width = '100%';
+                csHide(loading);
+                csShow(document.getElementById('resultSummary'), 'cs-block');
+                csShow(document.getElementById('downloadBtn'), 'cs-block');
+                showToast('生成成功！共导出 ' + newWb.SheetNames.length + ' 个工作表', 'success');
+            } catch (err) {
+                console.error('generateSheetManagerFile 错误:', err);
+                showToast(getFriendlyParseErrorMessage(err), 'error');
+            } finally {
+                isProcessing = false;
+            }
+        }
+
+        /** 工作表管理：唯一化目标工作表名（重名追加 _1/_2），31字符截断 */
+        function getUniqueSheetNameForManager(wb, desired) {
+            const maxLen = 31;
+            let base = desired;
+            if (base.length > maxLen) base = base.substring(0, maxLen);
+            let candidate = base;
+            let counter = 1;
+            const existing = {};
+            wb.SheetNames.forEach(function(sn) { existing[sn] = true; });
+            while (existing[candidate]) {
+                const suffix = '_' + counter;
+                candidate = base.substring(0, maxLen - suffix.length) + suffix;
+                counter++;
+            }
+            return candidate;
+        }
+
+        /** 工作表管理：从文件名模板生成导出文件名 */
+        function getSheetManagerFileName() {
+            const tplEl = document.getElementById('sheetManagerFileName');
+            let tpl = tplEl && tplEl.value ? tplEl.value : '{original}_managed';
+            const now = new Date();
+            const dateStr = now.getFullYear() + String(now.getMonth() + 1).padStart(2, '0') + String(now.getDate()).padStart(2, '0');
+            const timeStr = String(now.getHours()).padStart(2, '0') + String(now.getMinutes()).padStart(2, '0') + String(now.getSeconds()).padStart(2, '0');
+            const original = originalFileName.replace(/\.(xlsx|xls|xlsm|csv)$/i, '');
+            return tpl.replace(/\{original\}/g, original)
+                      .replace(/\{date\}/g, dateStr)
+                      .replace(/\{time\}/g, timeStr);
+        }
+
+        /** 工作表管理：删除工作表中所有单元格的样式引用（s），用于"仅数据"模式 */
+        function stripStylesFromWorksheet(ws) {
+            for (const addr in ws) {
+                if (!ws.hasOwnProperty(addr)) continue;
+                if (addr.charAt(0) === '!') continue; // 跳过 !cols/!rows 等元数据
+                const cell = ws[addr];
+                if (cell && typeof cell === 'object' && cell.s !== undefined) {
+                    delete cell.s;
+                }
+            }
+            return ws;
+        }
+
+        // #endregion
+
         function displayMergeSheetSelection() {
             const sheetSelectionId = currentMode === 'merge-file' ? 'mergeFileSheetSelection' : 'sheetSelection';
             const sheetSelection = document.getElementById(sheetSelectionId);
@@ -4975,13 +5552,30 @@
                 fileGroup.className = 'file-sheet-group';
 
                 const header = document.createElement('div');
-                header.className = 'file-sheet-group-header';
+                header.className = 'file-sheet-group-header' + (uploadedFile.sheets.length > 1 ? ' multi-sheet-file' : '');
                 // T05修复：使用textContent替代innerHTML，防止XSS
                 header.textContent = '';
                 const headerEmoji = document.createTextNode('📄 ');
                 const headerName = document.createTextNode(uploadedFile.name);
                 header.appendChild(headerEmoji);
                 header.appendChild(headerName);
+
+                // 页数徽标（多页文件更醒目）
+                const pageBadge = document.createElement('span');
+                pageBadge.className = 'file-sheet-count-badge' + (uploadedFile.sheets.length > 1 ? ' multi' : '');
+                pageBadge.textContent = uploadedFile.sheets.length > 1 ? `${uploadedFile.sheets.length} 页` : '1 页';
+                pageBadge.title = '此文件包含的工作表数量';
+                header.appendChild(pageBadge);
+
+                // 预览按钮
+                const previewBtn = document.createElement('button');
+                previewBtn.type = 'button';
+                previewBtn.className = 'sheet-preview-btn';
+                previewBtn.textContent = '预览';
+                previewBtn.setAttribute('aria-label', '预览 ' + uploadedFile.name + ' 的工作表内容');
+                previewBtn.addEventListener('click', () => showWorkbookPreview(fileIndex));
+                header.appendChild(previewBtn);
+
                 fileGroup.appendChild(header);
 
                 const sheetsContainer = document.createElement('div');
@@ -5020,6 +5614,97 @@
             });
             container.appendChild(fragment);
         }
+
+        /**
+         * 预览单个工作簿的每个工作表（表头 + 前几行）
+         * @param {number} fileIndex uploadedFiles 下标
+         */
+        function showWorkbookPreview(fileIndex) {
+            const uploadedFile = uploadedFiles[fileIndex];
+            if (!uploadedFile || !uploadedFile.workbook) return;
+
+            const overlay = document.getElementById('sheetPreviewOverlay');
+            const body = document.getElementById('sheetPreviewBody');
+            const title = document.getElementById('sheetPreviewTitle');
+            if (!overlay || !body) return;
+
+            title.textContent = '预览：' + uploadedFile.name;
+
+            const frag = document.createDocumentFragment();
+            const fileDiv = document.createElement('div');
+            fileDiv.className = 'prev-file';
+            const fileTitle = document.createElement('div');
+            fileTitle.className = 'prev-file-title';
+            fileTitle.textContent = uploadedFile.name + '（' + uploadedFile.sheets.length + ' 个工作表）';
+            fileDiv.appendChild(fileTitle);
+
+            uploadedFile.sheets.forEach(sheetName => {
+                const ws = uploadedFile.workbook.Sheets[sheetName];
+                const sheetDiv = document.createElement('div');
+                sheetDiv.className = 'prev-sheet';
+                const nameDiv = document.createElement('div');
+                nameDiv.className = 'prev-sheet-name';
+                nameDiv.textContent = '📑 ' + sheetName;
+                sheetDiv.appendChild(nameDiv);
+
+                let rows;
+                try {
+                    rows = XLSX.utils.sheet_to_json(ws, { header: 1, blankrows: false, raw: true });
+                } catch (e) {
+                    rows = [];
+                }
+                if (!rows || rows.length === 0) {
+                    const emptyDiv = document.createElement('div');
+                    emptyDiv.className = 'sheet-preview-empty';
+                    emptyDiv.textContent = '（空工作表）';
+                    sheetDiv.appendChild(emptyDiv);
+                } else {
+                    const previewRows = rows.slice(0, 8); // 表头 + 前7行
+                    const table = document.createElement('table');
+                    previewRows.forEach((row, ri) => {
+                        const tr = document.createElement('tr');
+                        const cells = row || [];
+                        const cellCount = Math.max(1, Math.min(cells.length, 12));
+                        for (let ci = 0; ci < cellCount; ci++) {
+                            const cell = (ri === 0 ? document.createElement('th') : document.createElement('td'));
+                            const v = cells[ci];
+                            cell.textContent = (v === undefined || v === null) ? '' : String(v);
+                            tr.appendChild(cell);
+                        }
+                        table.appendChild(tr);
+                    });
+                    sheetDiv.appendChild(table);
+                }
+                fileDiv.appendChild(sheetDiv);
+            });
+
+            frag.appendChild(fileDiv);
+            body.innerHTML = '';
+            body.appendChild(frag);
+            overlay.classList.add('open');
+            overlay.setAttribute('aria-hidden', 'false');
+        }
+
+        function closeSheetPreview() {
+            const overlay = document.getElementById('sheetPreviewOverlay');
+            if (!overlay) return;
+            overlay.classList.remove('open');
+            overlay.setAttribute('aria-hidden', 'true');
+        }
+
+        // 预览弹窗关闭事件
+        document.addEventListener('DOMContentLoaded', function initSheetPreviewEvents() {
+            const overlay = document.getElementById('sheetPreviewOverlay');
+            const closeBtn = document.getElementById('sheetPreviewClose');
+            if (!overlay) return;
+            if (closeBtn) closeBtn.addEventListener('click', closeSheetPreview);
+            overlay.addEventListener('click', function (ev) {
+                if (ev.target === overlay) closeSheetPreview();
+            });
+            document.addEventListener('keydown', function (ev) {
+                if (ev.key === 'Escape' && overlay.classList.contains('open')) closeSheetPreview();
+            });
+        });
 
         /**
          * 按名称分组渲染
@@ -5311,6 +5996,10 @@
         }
 
         function updateSelectedCount() {
+            if (currentMode === 'split-sheet-manager') {
+                updateSheetManagerControls();
+                return;
+            }
             if (currentMode.startsWith('split')) {
                 if (currentMode === 'split-sheet' || currentMode === 'split-rows') {
                     const selectedCountEl = document.getElementById('splitSheetSelectedCount');
@@ -5675,10 +6364,15 @@
 
             // Step 3: 根据模式显示对应选项面板
             if (step === 3) {
-                const panels = ['splitSheetOptions', 'splitColumnOptions', 'splitColumnVerticalOptions', 'splitRowsOptions', 'smartMergeOptions', 'mergeFileOptions', 'mergeSheetOptions', 'summaryMergeOptions', 'dataJoinOptions'];
+                const panels = ['splitSheetOptions', 'splitColumnOptions', 'splitColumnVerticalOptions', 'splitRowsOptions', 'smartMergeOptions', 'mergeFileOptions', 'mergeSheetOptions', 'summaryMergeOptions', 'dataJoinOptions', 'sheetManagerOptions'];
                 panels.forEach(function(id) { csHide(document.getElementById(id)); });
 
-                if (currentMode === 'split-sheet') {
+                if (currentMode === 'split-sheet-manager') {
+                    document.getElementById('step3Title').textContent = '配置工作表管理选项';
+                    csShow(document.getElementById('sheetManagerOptions'));
+                    updateSheetManagerSummary();
+                    document.getElementById('step3Next').disabled = getCheckedSheetManagerCount() === 0;
+                } else if (currentMode === 'split-sheet') {
                     document.getElementById('step3Title').textContent = '配置工作表选择';
                     csShow(document.getElementById('splitSheetOptions'));
                     document.getElementById('step3Next').disabled = selectedSheets.size === 0;
@@ -5728,7 +6422,9 @@
 
             // Step 4: 触发拆分或合并操作
             if (step === 4) {
-                if (currentMode.startsWith('split')) {
+                if (currentMode === 'split-sheet-manager') {
+                    generateSheetManagerFile();
+                } else if (currentMode.startsWith('split')) {
                     generateSplitFiles();
                 } else if (currentMode === 'smart-merge') {
                     performSmartMerge();
@@ -6935,14 +7631,30 @@
 
                 var sm_json = XLSX.utils.sheet_to_json(sm_ws, { header: 1, blankrows: false });
                 if (sm_json.length <= headerRows) continue;
-                // 大文件截断
-                const smMaxRows = getMaxDataRows();
-                if (smMaxRows > 0 && sm_json.length > smMaxRows) {
-                    sm_json = sm_json.slice(0, smMaxRows);
-                }
 
-                const sm_headerRow = sm_json.slice(0, headerRows);
-                const sm_dataRows = sm_json.slice(headerRows);
+                // 【真实场景修复】每文件自动识别"标题行"：
+                // 当全局表头行数为1、但本文件第1行很稀疏（如"2026年销售报表"大标题）、第2行才是真实列名时，
+                // 仅对本文件把第2行当表头并跳过第1行，避免整表数据错位。
+                // 这是单文件与全局 headerRows 无法同时满足的混合结构场景的唯一正确解。
+                let sm_headerRow = sm_json.slice(0, headerRows);
+                let sm_dataRows = sm_json.slice(headerRows);
+                if (headerRows === 1 && sm_json.length >= 2) {
+                    const r0 = sm_json[0] || [];
+                    const r1 = sm_json[1] || [];
+                    const maxC = getMaxColumnCount(sm_json);
+                    const dens0 = r0.filter(function(v){ return v !== undefined && v !== null && v !== ''; }).length;
+                    const dens1 = r1.filter(function(v){ return v !== undefined && v !== null && v !== ''; }).length;
+                    // 第1行稀疏（< 列数一半）、第2行更密集 ⇒ 第1行是标题行
+                    if (maxC > 1 && dens0 > 0 && dens0 < maxC / 2 && dens1 > dens0) {
+                        sm_headerRow = sm_json.slice(1, 2);
+                        sm_dataRows = sm_json.slice(2);
+                    }
+                }
+                // 大文件截断（在标题行识别之后，保证数据量与列对齐一致）
+                const smMaxRows = getMaxDataRows();
+                if (smMaxRows > 0 && sm_dataRows.length > smMaxRows) {
+                    sm_dataRows = sm_dataRows.slice(0, smMaxRows);
+                }
 
                 // 构建列名→索引映射（以第一行表头为准，多行表头拼接）
                 const sm_colMap = {};
@@ -7483,6 +8195,31 @@
             }
         }
 
+        /**
+         * 汇总数值归一化：把"看起来是数字但被存成文本"的值转成数字。
+         * 处理千分位逗号/全角逗号、货币符号、中文逗号、空格、全角数字。
+         * 无法解析则返回 NaN（由调用处统计为"非数值被忽略"）。
+         */
+        function normalizeNumericValue(v) {
+            if (v === undefined || v === null) return NaN;
+            if (typeof v === 'number') return v;
+            var s = String(v).trim();
+            if (s === '') return NaN;
+            // 全角→半角
+            var out = '';
+            for (var i = 0; i < s.length; i++) {
+                var c = s.charCodeAt(i);
+                if (c === 0x3000) { out += ' '; }
+                else if (c >= 0xFF01 && c <= 0xFF5E) { out += String.fromCharCode(c - 0xFEE0); }
+                else { out += s[i]; }
+            }
+            // 去掉千分位逗号、空格、货币符号
+            var stripped = out.replace(/[,，\s¥￥$€£%]/g, '');
+            if (stripped === '' || stripped === '-') return NaN;
+            var num = Number(stripped);
+            return isNaN(num) ? NaN : num;
+        }
+
         /** 执行合并计算：按分组列汇总指定数值列 */
         async function performSummaryMerge() {
             if (isProcessing) {
@@ -7582,6 +8319,7 @@
                 // 步骤4：逐组汇总
                 const resultRows = [];
                 const groupKeys = Object.keys(groups);
+                let skippedNonNumeric = 0;   // 累计被忽略的非数值单元格数（sum/avg/max/min 模式）
                 for (let gi = 0; gi < groupKeys.length; gi++) {
                     const gKey = groupKeys[gi];
                     var rows = groups[gKey];
@@ -7593,10 +8331,19 @@
 
                     for (let vi = 0; vi < valueColIndices.length; vi++) {
                         const vCol = valueColIndices[vi];
-                        const values = rows.map(r => {
-                            var val = r[vCol];
-                            return (val !== undefined && val !== null) ? Number(val) : NaN;
-                        }).filter(v => !isNaN(v));
+                        // 用数字归一化解析：千分位/货币/空格/全角数字都能算，无法解析的记入非数值
+                        const parsed = rows.map(r => {
+                            const val = r[vCol];
+                            return { raw: val, num: normalizeNumericValue(val) };
+                        });
+                        const numeric = parsed.filter(p => !isNaN(p.num));
+                        const nonEmpty = parsed.filter(p => {
+                            const v = p.raw;
+                            return v !== undefined && v !== null && String(v).trim() !== '';
+                        });
+                        // count 应对非空单元格计数（用户对文本列计数是常见需求），而非只对数值计数
+                        const effectiveValues = (method === 'count') ? nonEmpty : numeric;
+                        const values = effectiveValues.map(p => p.num);
 
                         var result;
                         switch (method) {
@@ -7608,6 +8355,10 @@
                             default: result = 0;
                         }
                         summaryRow.push(result);
+                        // 统计"非数值被忽略"的数量（count 模式除外，它不要求数值）
+                        if (method !== 'count') {
+                            skippedNonNumeric += parsed.length - numeric.length;
+                        }
                     }
                     resultRows.push(summaryRow);
 
@@ -7634,7 +8385,8 @@
                     sourceFileCount: uploadedFiles.length,
                     totalSheets: sortedKeys.length,
                     mergedRows: resultRows.length,
-                    note: methodLabel + '汇总'
+                    skippedNonNumeric: skippedNonNumeric,
+                    note: methodLabel + '汇总' + (skippedNonNumeric > 0 ? '（忽略 ' + skippedNonNumeric + ' 个非数值单元格）' : '')
                 };
                 lastSkippedSheets = [];
 
@@ -7650,7 +8402,11 @@
                 if (lastMergeStatistics) showMergeStatistics(lastMergeStatistics);
 
                 isProcessing = false;
-                showToast('合并计算成功！', 'success');
+                if (skippedNonNumeric > 0) {
+                    showToast('合并计算成功，但有 ' + skippedNonNumeric + ' 个非数值单元格被忽略（可能因千分位/货币符号/文本格式），请核对汇总结果', 'warning');
+                } else {
+                    showToast('合并计算成功！', 'success');
+                }
 
             } catch (error) {
                 console.error('合并计算错误:', error);
@@ -7720,6 +8476,61 @@
             }
         }
 
+        /**
+         * 数据匹配(JOIN)键归一化：trim + 全角→半角 + 大小写折叠，
+         * 并对"纯数字文本"去除千分位/货币符号后按数值归一，避免 VLOOKUP 式静默丢数据。
+         * 保守策略：不改变原始值含义，只消除"看起来一样却匹配不上"的常见差异。
+         */
+        function normalizeJoinKey(v) {
+            var s = (v === undefined || v === null) ? '' : String(v);
+            s = s.trim();
+            if (!s) return '';
+            // 全角 → 半角（含全角数字/字母/标点/空格）
+            var out = '';
+            for (var i = 0; i < s.length; i++) {
+                var c = s.charCodeAt(i);
+                if (c === 0x3000) { out += ' '; }
+                else if (c >= 0xFF01 && c <= 0xFF5E) { out += String.fromCharCode(c - 0xFEE0); }
+                else { out += s[i]; }
+            }
+            out = out.toLowerCase();
+            // 纯数字文本：去千分位/货币符号/空格后，若为合法数值则归一为数字串
+            // （保留前导零则按字符串比较——工号/编码类 '00123' vs '123' 不应强行相等，
+            //   但 '1,000' vs '1000' 这类金额应归一）
+            var stripped = out.replace(/[,，\s¥￥$€£]/g, '');
+            if (stripped !== '' && /^-?\d+(\.\d+)?$/.test(stripped)) {
+                // 仅当去除分隔符后是数字：若原值含千分位/货币符号才归一为数值，否则保留原样（含前导零）
+                if (stripped !== out.replace(/[¥￥$€£]/g, '').replace(/[,，\s]/g, '') || /[，,¥￥$€£]/.test(out)) {
+                    // 数字字符串，去掉前导零（保持数值语义），如 '00123' → '123'（纯编码数字）
+                    var numStr = String(parseFloat(stripped));
+                    return numStr === 'NaN' ? out : numStr;
+                }
+            }
+            return out;
+        }
+
+        /**
+         * 取指定文件用于数据匹配的所选工作表名：
+         * 尊重用户在 step3 勾选的工作表（而非盲目用第一个 sheet）：
+         * 仅当用户为该文件"明确只勾选了一个"工作表时，才用该 sheet；
+         * 若默认全选/多选（无法确定用户意图），回退到该文件第一个 sheet，避免歧义。
+         */
+        function getSelectedSheetForJoin(fileIndex) {
+            var file = uploadedFiles[fileIndex];
+            var chosen = null;
+            var count = 0;
+            var sortedKeys = getSortedSelectedSheets();
+            for (var ki = 0; ki < sortedKeys.length; ki++) {
+                var parsed = parseMergeSelectionKey(sortedKeys[ki]);
+                if (parsed && parsed.fileIndex === fileIndex) {
+                    chosen = parsed.sheetName;
+                    count++;
+                }
+            }
+            if (count === 1 && chosen) return chosen;
+            return (file && file.sheets && file.sheets[0]) || null;
+        }
+
         /** 执行数据匹配（JOIN） */
         async function performDataJoin() {
             if (isProcessing) {
@@ -7750,9 +8561,9 @@
                 if (uploadedFiles.length < 2) throw new Error('数据匹配需要至少上传两个文件');
                 if (isNaN(leftKeyCol) || isNaN(rightKeyCol)) throw new Error('请选择左右表的关键列');
 
-                // 读取左表数据
+                // 读取左表数据（尊重用户在 step3 勾选的工作表，而非盲目用第一个 sheet）
                 const leftFile = uploadedFiles[0];
-                const leftSheetName = leftFile.sheets[0];
+                const leftSheetName = getSelectedSheetForJoin(0);
                 const leftWs = leftFile.workbook.Sheets[leftSheetName];
                 if (!leftWs) throw new Error('左表工作表不存在');
                 const leftJson = XLSX.utils.sheet_to_json(leftWs, { header: 1, blankrows: false });
@@ -7762,9 +8573,9 @@
                 const leftHeader = leftSrc.slice(0, headerRows)[0] || [];
                 const leftData = leftSrc.slice(headerRows);
 
-                // 读取右表数据
+                // 读取右表数据（同样尊重所选 sheet）
                 const rightFile = uploadedFiles[1];
-                const rightSheetName = rightFile.sheets[0];
+                const rightSheetName = getSelectedSheetForJoin(1);
                 const rightWs = rightFile.workbook.Sheets[rightSheetName];
                 if (!rightWs) throw new Error('右表工作表不存在');
                 const rightJson = XLSX.utils.sheet_to_json(rightWs, { header: 1, blankrows: false });
@@ -7780,7 +8591,7 @@
                     const riEnd = Math.min(ri + djChunkSize, rightData.length);
                     for (let ri2 = ri; ri2 < riEnd; ri2++) {
                         const row = rightData[ri2] || [];
-                        const key = String(row[rightKeyCol] !== undefined && row[rightKeyCol] !== null ? row[rightKeyCol] : '');
+                        const key = normalizeJoinKey(row[rightKeyCol] !== undefined && row[rightKeyCol] !== null ? row[rightKeyCol] : '');
                         if (!rightIndex[key]) rightIndex[key] = [];
                         rightIndex[key].push(row);
                     }
@@ -7804,7 +8615,7 @@
 
                 for (let li = 0; li < leftData.length; li++) {
                     const leftRow = leftData[li] || [];
-                    const key = String(leftRow[leftKeyCol] !== undefined && leftRow[leftKeyCol] !== null ? leftRow[leftKeyCol] : '');
+                    const key = normalizeJoinKey(leftRow[leftKeyCol] !== undefined && leftRow[leftKeyCol] !== null ? leftRow[leftKeyCol] : '');
                     const rightRows = rightIndex[key] || [];
 
                     if (rightRows.length > 0) {
@@ -7839,20 +8650,20 @@
                     }
                 }
 
-                // 右连接：追加仅在右表存在的行
-                if (joinType === 'right' || joinType === 'inner') {
-                    // 预构建左表 key 的 Set，避免 O(n×m) 嵌套循环
+                // 右连接：追加仅在右表存在的行（仅 right 连接；inner 连接只保留两侧都匹配的行）
+                if (joinType === 'right') {
+                    // 预构建左表 key 的 Set（归一化），避免 O(n×m) 嵌套循环
                     const leftKeySet = new Set();
                     for (let liKs = 0; liKs < leftData.length; liKs++) {
                         const lkVal = leftData[liKs][leftKeyCol];
-                        leftKeySet.add(String(lkVal !== undefined && lkVal !== null ? lkVal : ''));
+                        leftKeySet.add(normalizeJoinKey(lkVal !== undefined && lkVal !== null ? lkVal : ''));
                     }
                     const djRightChunk = 200;
                     for (let ri = 0; ri < rightData.length; ri += djRightChunk) {
                         const riChunkEnd = Math.min(ri + djRightChunk, rightData.length);
                         for (let ri2 = ri; ri2 < riChunkEnd; ri2++) {
                             const rightRow = rightData[ri2] || [];
-                            const key = String(rightRow[rightKeyCol] !== undefined && rightRow[rightKeyCol] !== null ? rightRow[rightKeyCol] : '');
+                            const key = normalizeJoinKey(rightRow[rightKeyCol] !== undefined && rightRow[rightKeyCol] !== null ? rightRow[rightKeyCol] : '');
                             // 使用 Set 检查左表是否有此 key（替代 O(n×m) 循环）
                             const foundInLeft = leftKeySet.has(key);
                             if (!foundInLeft) {
@@ -7888,7 +8699,8 @@
                         sourceFileCount: uploadedFiles.length,
                         totalSheets: 2,
                         mergedRows: 0,
-                        note: joinType + ' join (0 matched)'
+                        leftUnmatched: leftData.length,
+                        note: joinType + ' join (0 matched)：左表 ' + leftData.length + ' 行均未匹配'
                     };
                     lastSkippedSheets = [];
                     loadingText.textContent = '完成！（0 行匹配）';
@@ -7911,6 +8723,10 @@
                 const mergedWs = XLSX.utils.aoa_to_sheet(outputData);
                 mergedWs['!cols'] = resultHeader.map(() => ({ wch: 14 }));
 
+                // 未匹配统计：让用户知道有多少行没关联上（避免"数据变少却不知道原因"）
+                const leftUnmatchedCount = Math.max(0, leftData.length - leftMatched.size);
+                const matchNote = joinType + ' join：左表 ' + leftData.length + ' 行，未匹配 ' + leftUnmatchedCount + ' 行';
+
                 const jnWb = XLSX.utils.book_new();
                 XLSX.utils.book_append_sheet(jnWb, mergedWs, '数据匹配结果');
 
@@ -7925,7 +8741,8 @@
                     sourceFileCount: uploadedFiles.length,
                     totalSheets: 2,
                     mergedRows: resultRows.length,
-                    note: joinType + ' join'
+                    leftUnmatched: leftUnmatchedCount,
+                    note: matchNote
                 };
                 lastSkippedSheets = [];
 
@@ -7941,7 +8758,11 @@
                 if (lastMergeStatistics) showMergeStatistics(lastMergeStatistics);
 
                 isProcessing = false;
-                showToast('数据匹配成功！', 'success');
+                if (leftUnmatchedCount > 0) {
+                    showToast('数据匹配成功，但左表有 ' + leftUnmatchedCount + ' 行未匹配上，请核对关键列的值（如空格、大小写、数字/文本格式不一致）', 'warning');
+                } else {
+                    showToast('数据匹配成功！', 'success');
+                }
 
             } catch (error) {
                 console.error('数据匹配错误:', error);
@@ -8082,7 +8903,7 @@
             else fail('T03.5 WorkbookCache 类已定义', 'WorkbookCache 未定义');
 
             // T04: 5种模式 DOM 按钮存在
-            const modes = ['split-sheet', 'split-column', 'split-column-vertical', 'split-rows', 'merge-file', 'merge-sheet', 'smart-merge', 'summary-merge', 'data-join'];
+            const modes = ['split-sheet', 'split-column', 'split-column-vertical', 'split-rows', 'split-sheet-manager', 'merge-file', 'merge-sheet', 'smart-merge', 'summary-merge', 'data-join'];
             modes.forEach(m => {
                 const btn = document.querySelector(`[data-mode="${m}"]`);
                 if (btn) pass('T04 模式按钮: ' + m);
@@ -9471,8 +10292,9 @@
 
         function downloadAllFiles() {
             const btn = document.getElementById('downloadBtn');
-            const blob = currentMode.startsWith('split') ? zipBlob : mergedFileBlob;
-            const fname = currentMode.startsWith('split') ? zipFileName : mergedFileName;
+            const isSplit = currentMode.startsWith('split') && currentMode !== 'split-sheet-manager';
+            const blob = isSplit ? zipBlob : mergedFileBlob;
+            const fname = isSplit ? zipFileName : mergedFileName;
             if (!blob || !fname) return;
             // 【Bug-2 修复】创建新 URL 前，统一释放之前的所有 ObjectURL
             pendingRevokeTimers.forEach(function(t) { clearTimeout(t); });
@@ -9564,6 +10386,8 @@
             if (stats.skippedEmpty !== undefined && stats.skippedEmpty > 0) items.push(`跳过空Sheet: ${stats.skippedEmpty} 个`);
             if (stats.skippedHeader !== undefined && stats.skippedHeader > 0) items.push(`跳过表头不一致: ${stats.skippedHeader} 个`);
             if (stats.skippedColumn !== undefined && stats.skippedColumn > 0) items.push(`跳过列数不一致: ${stats.skippedColumn} 个`);
+            if (stats.skippedNonNumeric !== undefined && stats.skippedNonNumeric > 0) items.push(`忽略非数值: ${stats.skippedNonNumeric} 个`);
+            if (stats.leftUnmatched !== undefined && stats.leftUnmatched > 0) items.push(`左表未匹配: ${stats.leftUnmatched} 行`);
             if (items.length > 0) {
                 // 使用flex wrap布局，自动换行
                 el.style.display = 'flex';
@@ -9643,6 +10467,13 @@
                 warnings.push(`⚠ 列数不一致 (${Array.from(colCounts).join(', ')})`);
             }
 
+            // 【真实场景】表头/结构不一致预警：检测列名集合差异、疑似标题行/多行表头
+            // 这些是"按列名对齐也救不回来"的结构性差异，合并前必须让用户看见，避免静默错位。
+            const structureIssues = detectMergeStructureIssues(sortedKeys, headerRows);
+            for (const issue of structureIssues) {
+                warnings.push(issue);
+            }
+
             content.innerHTML = '';
             items.forEach(item => {
                 const span = document.createElement('span');
@@ -9659,6 +10490,82 @@
             }
 
             el.style.display = 'flex';
+        }
+
+        /**
+         * 检测合并时可能导致数据错位/丢失的"结构性问题"，供预览预警。
+         * 覆盖真实场景：列名集合差异、疑似带标题行、疑似多行表头、空表头。
+         * @param {Array<string>} sortedKeys 已排序的合并选择键
+         * @param {number} headerRows 当前表头行数
+         * @returns {Array<string>} 可读的预警文案（空数组 = 无问题）
+         */
+        function detectMergeStructureIssues(sortedKeys, headerRows) {
+            const issues = [];
+            if (!sortedKeys || sortedKeys.length < 2) return issues; // 单表无需预警
+
+            // 收集每个工作表的列名集合（首个表头行）与表头行密度
+            const sheetMeta = [];
+            let referenceColNames = null;
+
+            for (const key of sortedKeys) {
+                const parsed = parseMergeSelectionKey(key);
+                if (!parsed) continue;
+                const file = uploadedFiles[parsed.fileIndex];
+                if (!file) continue;
+                const ws = file.workbook.Sheets[parsed.sheetName];
+                if (!ws) continue;
+                const json = XLSX.utils.sheet_to_json(ws, { header: 1, blankrows: false });
+                if (json.length <= headerRows) continue;
+
+                const colNames = new Set();
+                let headerDensity = 0; // 首个表头行的非空单元格数
+                let headerTotal = 0;
+                if (headerRows > 0 && json[0]) {
+                    headerTotal = getMaxColumnCount(json);
+                    for (let ci = 0; ci < headerTotal; ci++) {
+                        const v = json[0][ci];
+                        const has = v !== undefined && v !== null && v !== '';
+                        if (has) { colNames.add(String(v).trim()); headerDensity++; }
+                    }
+                }
+                const displayName = file.name + '-' + parsed.sheetName;
+                sheetMeta.push({ displayName, colNames, headerDensity, headerTotal, rowCount: json.length });
+
+                if (referenceColNames === null) referenceColNames = colNames;
+            }
+
+            if (sheetMeta.length < 2 || referenceColNames === null) return issues;
+
+            // 1) 疑似标题行/多行表头：首个表头行只有极少数非空单元格（< 列数的一半），
+            //    说明第一行很可能是"标题行"而非列名行，该文件的数据会被整体错位。
+            const titleRowLike = sheetMeta.filter(function(m) {
+                return m.headerTotal > 1 && m.headerDensity > 0 && m.headerDensity < m.headerTotal / 2;
+            });
+            if (titleRowLike.length > 0) {
+                issues.push(`ℹ 已识别含标题行: ${titleRowLike.map(function(m){return m.displayName;}).join('、')}（自动跳过首行标题并按第2行列名对齐）`);
+            }
+
+            // 2) 列名集合差异：某文件的列名集合与基准差异大（既缺失基准列、又有基准没有的列）
+            //    提示用户哪些列是独有的，合并后需留意。
+            const colDiffSheets = sheetMeta.filter(function(m) {
+                const missing = Array.from(referenceColNames).filter(function(n){ return !m.colNames.has(n); });
+                const extra = Array.from(m.colNames).filter(function(n){ return !referenceColNames.has(n); });
+                return missing.length > 0 || extra.length > 0;
+            });
+            if (colDiffSheets.length > 0 && !titleRowLike.length) {
+                // 仅当没有更严重的标题行问题时提示列名差异，避免警告堆叠
+                const diffs = colDiffSheets.map(function(m) {
+                    const missing = Array.from(referenceColNames).filter(function(n){ return !m.colNames.has(n); });
+                    const extra = Array.from(m.colNames).filter(function(n){ return !referenceColNames.has(n); });
+                    const parts = [];
+                    if (missing.length) parts.push('缺 ' + missing.slice(0,3).join(',') + (missing.length>3?'等':''));
+                    if (extra.length) parts.push('多 ' + extra.slice(0,3).join(',') + (extra.length>3?'等':''));
+                    return m.displayName + '（' + parts.join('; ') + '）';
+                });
+                issues.push('⚠ 各表列名不一致: ' + diffs.join('、'));
+            }
+
+            return issues;
         }
 
         function showSkippedSheetsInfo(sheetNames) {
