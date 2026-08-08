@@ -29,9 +29,6 @@ test/test-results/
 test/playwright-report/
 test/blob-report/
 
-# 本地遗留（v1.5.0 独立构建，excel.html 不引用）
-lib/xlsx.bundle.js
-
 # Empty AI metadata files
 SOUL.md
 USER.md

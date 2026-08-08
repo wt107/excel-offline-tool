@@ -14,7 +14,7 @@
         window.__browserTooOld = true;
     }
     </script>
-    <script src="lib/xlsx.full.min.js"></script>
+    <script src="lib/xlsx.bundle.js"></script>
     <script src="lib/jszip.min.js"></script>
     <style nonce="excel-offline-2026">
         /* ============================================================
@@ -1783,6 +1783,207 @@
             cellText: true
         };
     }
+
+    // ═══════════════════════════════════════════════════════════════
+    // #region [SECTION] 完整样式补全（读取既有 xlsx 时保留字体/边框）
+    // ═══════════════════════════════════════════════════════════════
+    // xlsx 库读取既有文件时，cell.s 只能解析出填充样式（patternType/fgColor），
+    // 字体加粗/颜色、边框等会丢失。此函数通过 JSZip 直接解析 xl/styles.xml 和
+    // 各工作表 XML，把完整样式（font/fill/border）补全回 cell.s，
+    // 使"保留格式"模式在拆分/合并时真正保留源文件的字体与边框。
+    // 解析失败时不阻断主流程，回退到库解析的基础样式。
+
+    /**
+     * 从样式XML片段中提取属性的正则辅助
+     */
+    function _xmlAttr(text, name) {
+        var re = new RegExp(name + '="([^"]*)"');
+        var m = text.match(re);
+        return m ? m[1] : null;
+    }
+
+    /**
+     * 解析 xl/styles.xml，返回 {fonts:[], fills:[], borders:[], xfs:[]}
+     * fonts[n]  : {bold, italic, sz, color:{rgb|theme}}
+     * fills[n]  : {patternType, fgColor:{rgb}}
+     * borders[n]: {left/right/top/bottom: {style}}  (缺省侧为 undefined)
+     * xfs[n]    : {fontId, fillId, borderId}
+     */
+    function parseStylesXml(xml) {
+        var out = { fonts: [], fills: [], borders: [], xfs: [] };
+        var re, m;
+
+        // fonts
+        re = /<font\b[^>]*>([\s\S]*?)<\/font>/g;
+        while ((m = re.exec(xml))) {
+            var inner = m[1];
+            var font = {};
+            if (/<b\s*\/>|<b\s+val="(?:1|true)"\s*\/>/.test(inner)) font.bold = true;
+            if (/<i\s*\/>|<i\s+val="(?:1|true)"\s*\/>/.test(inner)) font.italic = true;
+            var sz = inner.match(/<sz\s+val="([^"]*)"/);
+            if (sz) font.sz = +sz[1];
+            var col = inner.match(/<color\s+([^>]*)\/?>/);
+            if (col) {
+                var rgb = _xmlAttr(col[1], 'rgb');
+                var theme = _xmlAttr(col[1], 'theme');
+                if (rgb) font.color = { rgb: rgb };
+                else if (theme !== null) font.color = { theme: +theme };
+            }
+            out.fonts.push(font);
+        }
+
+        // fills (含默认 idx0/idx1)
+        re = /<fill\b[^>]*>([\s\S]*?)<\/fill>/g;
+        while ((m = re.exec(xml))) {
+            var fInner = m[1];
+            var fill = {};
+            var pt = fInner.match(/<patternFill\b[^>]*patternType="([^"]*)"/);
+            if (pt) fill.patternType = pt[1];
+            var fg = fInner.match(/<fgColor\s+[^>]*rgb="([^"]*)"/);
+            if (fg) fill.fgColor = { rgb: fg[1] };
+            out.fills.push(fill);
+        }
+
+        // borders
+        re = /<border\b[^>]*>([\s\S]*?)<\/border>/g;
+        while ((m = re.exec(xml))) {
+            var bInner = m[1];
+            var border = {};
+            var sides = ['left', 'right', 'top', 'bottom'];
+            for (var i = 0; i < sides.length; i++) {
+                var sm = bInner.match(new RegExp('<' + sides[i] + '\\b[^>]*style="([^"]*)"'));
+                if (sm) border[sides[i]] = { style: sm[1] };
+            }
+            out.borders.push(border);
+        }
+
+        // cellXfs
+        var xfsSection = xml.match(/<cellXfs[^>]*>([\s\S]*?)<\/cellXfs>/);
+        if (xfsSection) {
+            re = /<xf\b[^>]*?\/>/g;
+            while ((m = re.exec(xfsSection[1]))) {
+                var t = m[0];
+                var fontId = _xmlAttr(t, 'fontId');
+                var fillId = _xmlAttr(t, 'fillId');
+                var borderId = _xmlAttr(t, 'borderId');
+                out.xfs.push({
+                    fontId: fontId !== null ? +fontId : 0,
+                    fillId: fillId !== null ? +fillId : 0,
+                    borderId: borderId !== null ? +borderId : 0
+                });
+            }
+        }
+
+        return out;
+    }
+
+    /**
+     * 用完整样式补全 workbook 各 sheet 的 cell.s（字体/边框）
+     * @param {object} workbook - XLSX.read 的返回
+     * @param {Uint8Array|ArrayBuffer} data - 原始文件字节
+     */
+    async function enrichCellStyles(workbook, data) {
+        if (!workbook || !workbook.SheetNames || workbook.SheetNames.length === 0) return;
+        if (typeof JSZip === 'undefined') return;
+
+        var zip = await JSZip.loadAsync(data);
+        var stylesEntry = zip.file('xl/styles.xml');
+        if (!stylesEntry) return;
+
+        var stylesXml = await stylesEntry.async('string');
+        var parsed = parseStylesXml(stylesXml);
+        if (!parsed.xfs.length) return;
+
+        // 对每个工作表，读取对应 sheetN.xml 并补全
+        var sheetCount = workbook.SheetNames.length;
+        for (var si = 0; si < sheetCount; si++) {
+            var sheetName = workbook.SheetNames[si];
+            var ws = workbook.Sheets[sheetName];
+            if (!ws) continue;
+
+            // sheetN.xml 序号按 SheetNames 顺序（标准文件如此）
+            var sheetEntryName = 'xl/worksheets/sheet' + (si + 1) + '.xml';
+            var sheetEntry = zip.file(sheetEntryName);
+            if (!sheetEntry) continue;
+
+            var sheetXml = await sheetEntry.async('string');
+            // 提取所有带样式索引的单元格 <c r="A1" s="n">
+            var cellRe = /<c\b([^>]*?)(?:\/>|>[\s\S]*?<\/c>)/g;
+            var m;
+            while ((m = cellRe.exec(sheetXml))) {
+                var attrs = m[1];
+                var addr = _xmlAttr(attrs, 'r');
+                var sIdx = _xmlAttr(attrs, 's');
+                if (!addr || sIdx === null) continue;
+                var xf = parsed.xfs[+sIdx];
+                if (!xf) continue;
+
+                var cell = ws[addr];
+                if (!cell) continue;
+
+                // 判定需要补全的样式部分
+                var font = parsed.fonts[xf.fontId];
+                var fill = parsed.fills[xf.fillId];
+                var border = parsed.borders[xf.borderId];
+                var needFont = !!(font && (font.bold || font.italic || font.sz || font.color && font.color.rgb));
+                var needFill = !!(fill && fill.patternType && fill.patternType !== 'none');
+                var needBorder = !!(border && (border.left || border.right || border.top || border.bottom));
+                if (!needFont && !needFill && !needBorder) continue;
+
+                // xlsx 库读取后，多个无样式单元格可能共享同一个 cell.s 对象引用；
+                // 若直接修改会互相污染（如给某格加粗会广播到所有共享格）。
+                // 因此先深拷贝出独立的 cell.s 再操作。
+                var base = (typeof cell.s === 'object' && cell.s !== null) ? cell.s : {};
+                var s = {};
+                if (base.patternType || base.fgColor) { s.patternType = base.patternType; if (base.fgColor) s.fgColor = base.fgColor; }
+                if (base.numFmt) s.numFmt = base.numFmt;
+                cell.s = s;
+
+                // 补全字体
+                if (needFont) {
+                    s.font = {};
+                    if (font.bold) s.font.bold = true;
+                    if (font.italic) s.font.italic = true;
+                    if (font.sz) s.font.sz = font.sz;
+                    // 主题色无法映射为固定 rgb，忽略（保留默认黑色）
+                    if (font.color && font.color.rgb) s.font.color = { rgb: font.color.rgb };
+                }
+
+                // 补全填充
+                if (needFill) {
+                    s.fill = { patternType: fill.patternType };
+                    if (fill.fgColor && fill.fgColor.rgb) s.fill.fgColor = { rgb: fill.fgColor.rgb };
+                }
+
+                // 补全边框
+                if (needBorder) {
+                    s.border = {};
+                    var sides = ['left', 'right', 'top', 'bottom'];
+                    for (var k = 0; k < sides.length; k++) {
+                        if (border[sides[k]]) s.border[sides[k]] = { style: border[sides[k]].style };
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * 读取文件并补全完整样式
+     * @param {Uint8Array|ArrayBuffer} data - 原始文件字节
+     * @param {boolean} isPreserve - 是否"保留格式"模式（仅此模式补全样式）
+     */
+    async function readWorkbookWithFullStyles(data, isPreserve) {
+        var wb = XLSX.read(data, getReadOptions());
+        if (isPreserve) {
+            try {
+                await enrichCellStyles(wb, data);
+            } catch (e) {
+                console.warn('[样式补全] 失败，回退基础样式:', e && e.message);
+            }
+        }
+        return wb;
+    }
+    // #endregion
 
     // 统一的写入选项（同样动态）
     function getExportFormat() {
@@ -3982,7 +4183,7 @@
                             // XLS文件：分批读取，每批让出主线程
                             rawWorkbook = await parseXlsWithYield(data);
                         } else {
-                            rawWorkbook = XLSX.read(data, getReadOptions());
+                            rawWorkbook = await readWorkbookWithFullStyles(data, getEffectiveProcessingMode(currentMode) !== 'data');
                         }
                         
                         // 更新加载提示
@@ -4372,8 +4573,10 @@
                             return;
                         }
                         
-                        // 读取文件
-                        const rawWorkbook = XLSX.read(data, getReadOptions());
+                        // 读取文件（xlsx 走完整样式补全；xls 无 zip 结构，用基础解析）
+                        const rawWorkbook = isXls
+                            ? XLSX.read(data, getReadOptions())
+                            : await readWorkbookWithFullStyles(data, getEffectiveProcessingMode(currentMode) !== 'data');
                         
                         let result;
                         // 如果是 XLS 文件，转换为 XLSX 格式以确保格式统一
